@@ -1,0 +1,14 @@
+# 先扫描所有文件
+obj-y := $(patsubst %.c,%.o,$(wildcard *.c))
+
+ccflags-y += -I$(TOPDIR)/lib/libfdt
+
+# 引入通用规则
+include $(TOPDIR)/scripts/Kbuild.include
+
+$(info ===== libfdt Kbuild =====)
+$(info OBJDIR = $(OBJDIR))
+$(info ccflags-y = $(ccflags-y))
+$(info obj-y = $(obj-y))
+$(info CFLAGS = $(CFLAGS))
+$(info =========================)
