@@ -1,0 +1,42 @@
+# scripts/Kbuild.include（所有「怎么做」的逻辑，Kbuild 仅声明）
+# ===================== 实现：编译规则 =====================
+# 1. 汇编文件编译（.S → .o）
+$(OBJDIR)/%.o: %.S
+	$(CC) $(CFLAGS) $(ccflags-y) -c $< -o $@
+
+# 2. C 文件编译（.c → .o）
+$(OBJDIR)/%.o: %.c
+	$(CC) $(CFLAGS) $(ccflags-y) -c $< -o $@
+
+# 3. dts->.o
+$(OBJDIR)/%.o: %.dts
+	dtc -I dts -O dtb -o $(OBJDIR)/$*.dtb $<
+	$(OBJCOPY) -I binary -O elf64-littleaarch64 -B aarch64 \
+		--rename-section .data=.dtb,alloc,load,readonly,data,contents \
+		$(OBJDIR)/$*.dtb $@
+
+# 声明子目录产物路径（仅定义路径，实现逻辑在 include 文件）
+subdir-y := $(patsubst %/,%,$(filter %/, $(obj-y)))
+subdir-objs := $(foreach dir,$(subdir-y),$(OUTPUT)/.tmp/$(dir)/built-in.o)
+
+
+# ===================== 实现：built-in.o 生成 =====================
+obj-files := $(filter-out %/, $(obj-y))
+objs := $(addprefix $(OBJDIR)/, $(obj-files))
+built-in.o: $(objs) $(subdir-objs)
+	$(LD) -r -o $@ $^
+
+# ===================== 实现：最终内核链接 =====================
+$(OUTPUT)/kernel.elf: $(subdir-objs)
+	$(LD) $(LDFLAGS) -o $@ $^
+
+# ===================== 实现：子目录递归编译 =====================
+$(OUTPUT)/.tmp/%/built-in.o:
+	@mkdir -p $(dir $@)
+	$(MAKE) -C $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@) \
+	        -f $(CURDIR)/$*/Kbuild \
+	        CC=$(CC) \
+	        CFLAGS="$(CFLAGS)" \
+	        OBJDIR=$(OUTPUT)/.tmp/$* \
+	        TOPDIR=$(TOPDIR)
+	@mv $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@)/built-in.o $@

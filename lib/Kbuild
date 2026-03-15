@@ -1,0 +1,12 @@
+# 先扫描所有文件
+obj-y := $(patsubst %.c,%.o,$(wildcard *.c))
+
+obj-y += libfdt/
+
+# 引入通用规则
+include $(TOPDIR)/scripts/Kbuild.include
+
+# 调试信息（编译时显示，帮助确认）
+$(info lib: obj-y = $(obj-y))
+$(info lib: subdir-y = $(subdir-y))
+$(info lib: subdir-objs = $(subdir-objs))

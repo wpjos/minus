@@ -1,0 +1,8 @@
+# src/kernel/Kbuild（仅编译内核核心代码）
+# 声明当前目录要编译的文件（main.c 是内核主逻辑）
+obj-y := $(patsubst %.c,%.o,$(wildcard *.c))
+obj-y += $(patsubst %.S,%.o,$(wildcard *.S))
+
+ccflags-y += -I$(TOPDIR)/lib/libfdt
+
+include $(TOPDIR)/scripts/Kbuild.include

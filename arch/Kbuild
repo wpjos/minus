@@ -1,0 +1,6 @@
+# src/arch/Kbuild（仅编译 AArch64 架构相关代码）
+
+obj-y := $(patsubst %.c,%.o,$(wildcard *.c))
+obj-y += $(patsubst %.S,%.o,$(wildcard *.S))
+
+include $(TOPDIR)/scripts/Kbuild.include

@@ -1,0 +1,3 @@
+obj-y := virt.o
+
+include $(TOPDIR)/scripts/Kbuild.include

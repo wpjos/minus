@@ -1,0 +1,6 @@
+# src/arch/Kbuild（仅编译 AArch64 架构相关代码）
+
+obj-y += module.o
+obj-y += uart.o
+
+include $(TOPDIR)/scripts/Kbuild.include
