@@ -1,6 +1,6 @@
 #ifndef __MM_H__
 #define __MM_H__
 
-void mm_init(void *bootarg);
+void mm_init(void);
 
 #endif
