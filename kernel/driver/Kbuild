@@ -1,0 +1,4 @@
+obj-y += core/
+obj-y += uart.o
+
+include $(TOPDIR)/scripts/Kbuild.include

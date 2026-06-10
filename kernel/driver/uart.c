@@ -1,29 +1,60 @@
 #include "uart.h"
+#include "platform.h"
 #include "module.h"
+#include "types.h"
 
-#define UART_BASE 0x09000000
-#define UART_DR   (*(volatile unsigned int *)(UART_BASE + 0x00))
-#define UART_FR   (*(volatile unsigned int *)(UART_BASE + 0x18))
-#define UART_CR   (*(volatile unsigned int *)(UART_BASE + 0x30))
+/* PL011 UART register offsets */
+#define UART_DR(base)	(*(volatile uint32_t *)((base) + 0x00))
+#define UART_FR(base)	(*(volatile uint32_t *)((base) + 0x18))
+#define UART_CR(base)	(*(volatile uint32_t *)((base) + 0x30))
 
-// 初始化串口
-static void uart_init(void) {
-    UART_CR = 0x301;  // 启用 TX/RX，开启 UART
+/* Cached base address, set during probe */
+static uint64_t g_uart_base;
+
+void uart_putc(char c)
+{
+	if (!g_uart_base)
+		return;
+	while (UART_FR(g_uart_base) & (1 << 5))
+		;
+	UART_DR(g_uart_base) = c;
 }
 
-// 发送单个字符
-void uart_putc(char c) {
-    // 等待发送缓冲区为空
-    while ((UART_FR & (1 << 5)) != 0);
-    // 写入字符
-    UART_DR = c;
+void uart_puts(const char *str)
+{
+	while (*str)
+		uart_putc(*str++);
 }
 
-// 发送字符串
-void uart_puts(const char *str) {
-    while (*str) {
-        uart_putc(*str++);
-    }
+static int uart_probe(struct platform_device *pdev)
+{
+	g_uart_base = pdev->resource_start;
+	UART_CR(g_uart_base) = 0x301;	/* enable TX/RX */
+	return 0;
 }
 
+static int uart_remove(struct platform_device *pdev)
+{
+	if (g_uart_base)
+		UART_CR(g_uart_base) = 0;
+	g_uart_base = 0;
+	return 0;
+}
+
+static const struct of_device_id uart_of_match[] = {
+	{ .compatible = "arm,pl011" },
+	{ /* sentinel */ }
+};
+
+static struct platform_driver uart_driver = {
+	.drv = { .name = "uart-pl011" },
+	.probe = uart_probe,
+	.remove = uart_remove,
+	.of_match_table = uart_of_match,
+};
+
+static void uart_init(void)
+{
+	platform_driver_register(&uart_driver);
+}
 module_register(uart, uart_init);

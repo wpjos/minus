@@ -1,0 +1,3 @@
+obj-y := bus.o device.o driver.o module.o platform.o of.o
+
+include $(TOPDIR)/scripts/Kbuild.include

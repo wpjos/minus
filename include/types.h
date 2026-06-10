@@ -38,7 +38,7 @@ typedef __s8   int8_t;
 #define BITS_PER_BYTE		(8UL)
 
 #ifndef offsetof
-#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+#define offsetof(TYPE, MEMBER) ((uintptr_t) &((TYPE *)0)->MEMBER)
 #endif
 
 #define container_of(ptr, type, member) ({			\
