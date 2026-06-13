@@ -1,4 +1,7 @@
 #include "platform.h"
+#include "module.h"
+#include "of.h"
+#include "fdt.h"
 #include "dlist.h"
 #include "string.h"
 
@@ -67,14 +70,6 @@ static int platform_remove(struct device *dev)
 }
 
 /*
- * Initialize the platform bus
- */
-int platform_bus_init(void)
-{
-	return bus_register(&platform_bus_type);
-}
-
-/*
  * Register a platform device
  */
 int platform_device_register(struct platform_device *pdev)
@@ -92,3 +87,14 @@ int platform_driver_register(struct platform_driver *pdrv)
 	pdrv->drv.of_match_table = pdrv->of_match_table;
 	return driver_register(&pdrv->drv);
 }
+
+/*
+ * Initialize the platform bus
+ */
+static void platform_bus_init(void)
+{
+	(void)bus_register(&platform_bus_type);
+	of_platform_populate(fdt_base());
+
+}
+module_register(platform_bus, MODULE_LEVEL_CORE, platform_bus_init);

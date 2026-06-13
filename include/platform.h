@@ -34,7 +34,6 @@ struct platform_driver {
 	container_of(__d, struct platform_driver, drv)
 
 /* Platform bus API */
-int platform_bus_init(void);
 int platform_device_register(struct platform_device *pdev);
 int platform_driver_register(struct platform_driver *pdrv);
 

@@ -57,4 +57,4 @@ static void uart_init(void)
 {
 	platform_driver_register(&uart_driver);
 }
-module_register(uart, uart_init);
+module_register(uart, MODULE_LEVEL_HIGH, uart_init);

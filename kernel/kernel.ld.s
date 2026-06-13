@@ -9,7 +9,14 @@ SECTIONS
 	}
 	.init : {
 		__module_start = .;
-		*(.module.init)
+		*(.module_l0.init)
+		*(.module_l1.init)
+		*(.module_l2.init)
+		*(.module_l3.init)
+		*(.module_l4.init)
+		*(.module_l5.init)
+		*(.module_l6.init)
+		*(.module_l7.init)
 		__module_end = .;
 
 		__vector_start = .;

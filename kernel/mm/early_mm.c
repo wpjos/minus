@@ -61,10 +61,10 @@ static void early_mm_add_region(uint64_t base, uint64_t size)
 }
 
 /*
- * Sort the free list by address and coalesce adjacent blocks.
+ * Sort the free list by address and merge adjacent blocks.
  * Called once after all regions are added during init.
  */
-static void sort_and_coalesce(void)
+static void early_mm_sort(void)
 {
 	/* Insertion sort by address (few regions expected) */
 	struct free_block *sorted = NULL;
@@ -88,7 +88,7 @@ static void sort_and_coalesce(void)
 
 	free_list = sorted;
 
-	/* Coalesce adjacent blocks */
+	/* merge adjacent blocks */
 	cur = free_list;
 	while (cur && cur->next) {
 		if ((uint8_t *)cur + cur->size == (uint8_t *)cur->next) {
@@ -136,6 +136,7 @@ static void early_mm_fdt_register_all(void *fdt, int root)
 			continue;
 		early_mm_fdt_register_one(reg, prop_len, address_cells, size_cells);
 	}
+	early_mm_sort();
 }
 
 void early_mm_init(void)
@@ -150,9 +151,12 @@ void early_mm_init(void)
 		return;
 
 	early_mm_fdt_register_all(fdt, root);
-	sort_and_coalesce();
 
 	printk("early_mm: %d MB available\n", (int)(total_size / (1024 * 1024)));
+}
+
+void early_mm_reserve(void *ptr, uint64_t size)
+{
 }
 
 /*
