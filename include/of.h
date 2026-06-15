@@ -3,6 +3,9 @@
 
 #include "types.h"
 
+/* Forward declaration: struct resource is defined in platform.h */
+struct resource;
+
 /*
  * Open Firmware (Device Tree) helper functions
  */
@@ -19,12 +22,27 @@ int of_get_compatible(const void *fdt, int nodeoffset,
 int of_device_is_compatible(const void *fdt, int nodeoffset,
 			    const char *compat);
 
-/* Get address and size from reg property (uses parent for #cells) */
-int of_get_address(const void *fdt, int nodeoffset, int parent,
-		   uint64_t *addr, uint64_t *size);
+/*
+ * Get the index-th memory resource from a reg property.
+ * Uses parent node for #address-cells and #size-cells.
+ * Returns 0 on success, -1 on error.
+ */
+int of_get_address_resource(const void *fdt, int nodeoffset, int parent,
+			    int index, struct resource *res);
 
-/* Get interrupt number from interrupts property */
-int of_get_irq(const void *fdt, int nodeoffset, int index);
+/* Count the number of address entries in a reg property */
+int of_get_address_count(const void *fdt, int nodeoffset, int parent);
+
+/*
+ * Get the index-th IRQ resource from an interrupts property.
+ * Reads #interrupt-cells from the node's interrupt-parent.
+ * Returns 0 on success, -1 on error.
+ */
+int of_get_irq_resource(const void *fdt, int nodeoffset, int index,
+			struct resource *res);
+
+/* Count the number of interrupts in an interrupts property */
+int of_get_irq_count(const void *fdt, int nodeoffset);
 
 /* Scan device tree and register platform devices */
 int of_platform_populate(const void *fdt);

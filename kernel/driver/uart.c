@@ -28,7 +28,11 @@ void uart_puts(const char *str)
 
 static int uart_probe(struct platform_device *pdev)
 {
-	g_uart_base = pdev->resource_start;
+	struct resource *res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res)
+		return -1;
+
+	g_uart_base = res->start;
 	UART_CR(g_uart_base) = 0x301;	/* enable TX/RX */
 	return 0;
 }

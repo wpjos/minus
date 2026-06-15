@@ -63,15 +63,16 @@ int of_device_is_compatible(const void *fdt, int nodeoffset,
 }
 
 /*
- * Get address and size from reg property
- * Uses parent node for #address-cells and #size-cells
+ * Get the index-th memory resource from a reg property.
+ * Uses parent node for #address-cells and #size-cells.
  */
-int of_get_address(const void *fdt, int nodeoffset, int parent,
-		   uint64_t *addr, uint64_t *size)
+int of_get_address_resource(const void *fdt, int nodeoffset, int parent,
+			    int index, struct resource *res)
 {
 	const fdt32_t *prop;
 	int len;
-	int ac, sc;
+	int ac, sc, entry_cells, offset;
+	uint64_t addr, size;
 
 	ac = fdt_address_cells(fdt, parent);
 	sc = fdt_size_cells(fdt, parent);
@@ -82,47 +83,186 @@ int of_get_address(const void *fdt, int nodeoffset, int parent,
 	if (!prop)
 		return -1;
 
-	/* Check we have enough data for at least one entry */
-	int entry_cells = ac + sc;
-	if (len < entry_cells * (int)sizeof(fdt32_t))
+	entry_cells = ac + sc;
+	if (len < (index + 1) * entry_cells * (int)sizeof(fdt32_t))
 		return -1;
 
-	*addr = 0;
-	if (ac >= 2)
-		*addr = ((uint64_t)fdt32_to_cpu(prop[0]) << 32) |
-			fdt32_to_cpu(prop[1]);
-	else
-		*addr = fdt32_to_cpu(prop[0]);
+	offset = index * entry_cells;
 
-	*size = 0;
-	if (sc >= 2)
-		*size = ((uint64_t)fdt32_to_cpu(prop[ac]) << 32) |
-			fdt32_to_cpu(prop[ac + 1]);
+	addr = 0;
+	if (ac >= 2)
+		addr = ((uint64_t)fdt32_to_cpu(prop[offset]) << 32) |
+			fdt32_to_cpu(prop[offset + 1]);
 	else
-		*size = fdt32_to_cpu(prop[ac]);
+		addr = fdt32_to_cpu(prop[offset]);
+
+	size = 0;
+	if (sc >= 2)
+		size = ((uint64_t)fdt32_to_cpu(prop[offset + ac]) << 32) |
+			fdt32_to_cpu(prop[offset + ac + 1]);
+	else
+		size = fdt32_to_cpu(prop[offset + ac]);
+
+	res->start = addr;
+	res->end = addr + size - 1;
+	res->flags = IORESOURCE_MEM;
+	res->name = NULL;
 
 	return 0;
 }
 
 /*
- * Get interrupt number from interrupts property
- * Simplified for QEMU virt (3 cells per interrupt: type, irq, flags)
+ * Count the number of address entries in a reg property.
  */
-int of_get_irq(const void *fdt, int nodeoffset, int index)
+int of_get_address_count(const void *fdt, int nodeoffset, int parent)
 {
 	const fdt32_t *prop;
 	int len;
+	int ac, sc, entry_cells;
+
+	ac = fdt_address_cells(fdt, parent);
+	sc = fdt_size_cells(fdt, parent);
+	if (ac < 0 || sc < 0)
+		return 0;
+
+	prop = fdt_getprop(fdt, nodeoffset, "reg", &len);
+	if (!prop)
+		return 0;
+
+	entry_cells = ac + sc;
+	if (len < entry_cells * (int)sizeof(fdt32_t))
+		return 0;
+
+	return len / (entry_cells * sizeof(fdt32_t));
+}
+
+/*
+ * Find the interrupt-parent of a node.
+ * Returns the node offset, or a negative error code.
+ */
+static int of_find_interrupt_parent(const void *fdt, int nodeoffset)
+{
+	const fdt32_t *prop;
+	int len;
+	int parent;
+	uint32_t phandle;
+
+	prop = fdt_getprop(fdt, nodeoffset, "interrupt-parent", &len);
+	if (prop && len >= (int)sizeof(fdt32_t)) {
+		phandle = fdt32_to_cpu(prop[0]);
+		return fdt_node_offset_by_phandle(fdt, phandle);
+	}
+
+	/* No explicit interrupt-parent: inherit from the device parent */
+	parent = fdt_parent_offset(fdt, nodeoffset);
+	if (parent < 0)
+		return parent;
+
+	/* If the parent is an interrupt-controller, use it */
+	if (fdt_getprop(fdt, parent, "interrupt-controller", NULL))
+		return parent;
+
+	/* Otherwise keep walking up */
+	return of_find_interrupt_parent(fdt, parent);
+}
+
+/*
+ * Read #interrupt-cells from an interrupt controller node.
+ * Returns the cell count, or a negative error code.
+ */
+static int of_get_interrupt_cells(const void *fdt, int intc)
+{
+	const fdt32_t *prop;
+	int len;
+
+	if (intc < 0)
+		return -1;
+
+	prop = fdt_getprop(fdt, intc, "#interrupt-cells", &len);
+	if (!prop || len < (int)sizeof(fdt32_t))
+		return -1;
+
+	return (int)fdt32_to_cpu(prop[0]);
+}
+
+/*
+ * Convert raw interrupt cells to an IRQ number.
+ * Default mapping (matches ARM GIC): for 1-cell controllers use cell[0],
+ * otherwise cell[1] is the IRQ number.
+ */
+static int of_irq_from_cells(const fdt32_t *cells, int nr_cells)
+{
+	if (nr_cells <= 0)
+		return -1;
+	if (nr_cells == 1)
+		return (int)fdt32_to_cpu(cells[0]);
+	return (int)fdt32_to_cpu(cells[1]);
+}
+
+/*
+ * Get the index-th IRQ resource from an interrupts property.
+ * Reads #interrupt-cells from the node's interrupt-parent.
+ */
+int of_get_irq_resource(const void *fdt, int nodeoffset, int index,
+			struct resource *res)
+{
+	const fdt32_t *prop;
+	int len;
+	int intc, icells;
+	int irq;
+
+	intc = of_find_interrupt_parent(fdt, nodeoffset);
+	if (intc < 0)
+		return -1;
+
+	icells = of_get_interrupt_cells(fdt, intc);
+	if (icells < 0)
+		return -1;
+
+	prop = fdt_getprop(fdt, nodeoffset, "interrupts", &len);
+	if (!prop)
+		return -1;
+
+	if (len < (index + 1) * icells * (int)sizeof(fdt32_t))
+		return -1;
+
+	irq = of_irq_from_cells(prop + index * icells, icells);
+	if (irq < 0)
+		return -1;
+
+	res->start = (uint64_t)irq;
+	res->end = (uint64_t)irq;
+	res->flags = IORESOURCE_IRQ;
+	res->name = NULL;
+
+	return 0;
+}
+
+/*
+ * Count the number of interrupts in an interrupts property.
+ */
+int of_get_irq_count(const void *fdt, int nodeoffset)
+{
+	const fdt32_t *prop;
+	int len;
+	int intc, icells;
 
 	prop = fdt_getprop(fdt, nodeoffset, "interrupts", &len);
 	if (!prop)
 		return 0;
 
-	/* QEMU virt uses 3 cells per interrupt (GIC: type, irq, flags) */
-	if (len < (index + 1) * 3 * (int)sizeof(fdt32_t))
+	intc = of_find_interrupt_parent(fdt, nodeoffset);
+	if (intc < 0)
 		return 0;
 
-	prop += index * 3;
-	return fdt32_to_cpu(prop[1]);
+	icells = of_get_interrupt_cells(fdt, intc);
+	if (icells <= 0)
+		return 0;
+
+	if (len < icells * (int)sizeof(fdt32_t))
+		return 0;
+
+	return len / (icells * sizeof(fdt32_t));
 }
 
 /*
@@ -152,6 +292,7 @@ int of_platform_populate(const void *fdt)
 		int len;
 		int parent;
 		struct platform_device *pdev;
+		int i, count;
 
 		name = fdt_get_name(fdt, node, NULL);
 		if (!name)
@@ -176,16 +317,28 @@ int of_platform_populate(const void *fdt)
 		pdev->dev.of_node = node;
 		pdev->compatible = compat;
 
-		/* Parse reg property using parent's #address-cells/#size-cells */
+		/* Parse all reg entries using parent's #address-cells/#size-cells */
 		parent = fdt_parent_offset(fdt, node);
 		if (parent >= 0) {
-			of_get_address(fdt, node, parent,
-				       &pdev->resource_start,
-				       &pdev->resource_size);
+			count = of_get_address_count(fdt, node, parent);
+			if (count > PLATFORM_MAX_RESOURCES)
+				count = PLATFORM_MAX_RESOURCES;
+			for (i = 0; i < count; i++) {
+				of_get_address_resource(fdt, node, parent, i,
+							&pdev->resource[i]);
+			}
+			pdev->num_resources = count;
 		}
 
-		/* Parse interrupts */
-		pdev->irq = of_get_irq(fdt, node, 0);
+		/* Parse all interrupts */
+		count = of_get_irq_count(fdt, node);
+		if (count > PLATFORM_MAX_RESOURCES - pdev->num_resources)
+			count = PLATFORM_MAX_RESOURCES - pdev->num_resources;
+		for (i = 0; i < count; i++) {
+			of_get_irq_resource(fdt, node, i,
+					    &pdev->resource[pdev->num_resources + i]);
+		}
+		pdev->num_resources += count;
 
 		platform_device_register(pdev);
 		of_device_count++;
