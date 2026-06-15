@@ -1,0 +1,3 @@
+obj-y += gic_v3.o
+
+include $(TOPDIR)/scripts/Kbuild.include

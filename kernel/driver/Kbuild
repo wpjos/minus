@@ -1,4 +1,5 @@
 obj-y += core/
+obj-y += gic/
 obj-y += timer/
 obj-y += uart.o
 

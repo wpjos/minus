@@ -187,16 +187,33 @@ static int of_get_interrupt_cells(const void *fdt, int intc)
 
 /*
  * Convert raw interrupt cells to an IRQ number.
- * Default mapping (matches ARM GIC): for 1-cell controllers use cell[0],
- * otherwise cell[1] is the IRQ number.
+ * ARM GIC: cell[0] = type (0=SPI, 1=PPI, 2=SGI),
+ *           cell[1] = index within that type,
+ *           cell[2] = flags.
  */
 static int of_irq_from_cells(const fdt32_t *cells, int nr_cells)
 {
+	uint32_t type, irq;
+
 	if (nr_cells <= 0)
 		return -1;
+
 	if (nr_cells == 1)
 		return (int)fdt32_to_cpu(cells[0]);
-	return (int)fdt32_to_cpu(cells[1]);
+
+	type = fdt32_to_cpu(cells[0]);
+	irq = fdt32_to_cpu(cells[1]);
+
+	switch (type) {
+	case 0: /* SPI */
+		return (int)(irq + 32);
+	case 1: /* PPI */
+		return (int)(irq + 16);
+	case 2: /* SGI */
+		return (int)irq;
+	default:
+		return -1;
+	}
 }
 
 /*

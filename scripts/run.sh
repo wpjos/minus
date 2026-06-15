@@ -19,7 +19,7 @@ KERNEL_ELF=${OUTDIR}/kernel.elf
 
 # QEMU 核心参数（AArch64 virt 平台）
 QEMU_CMD="qemu-system-aarch64 \
-    -M virt \
+    -M virt,gic-version=3 \
     -cpu cortex-a72 \
     -m 1G \
     -kernel ${KERNEL_ELF} \

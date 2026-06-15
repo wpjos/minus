@@ -1,0 +1,5 @@
+obj-y += start.o
+obj-y += irq.o
+obj-y += vectors.o
+
+include $(TOPDIR)/scripts/Kbuild.include

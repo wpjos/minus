@@ -33,7 +33,7 @@ KBUILD_CFLAGS := -I ${TOPDIR}/include \
 # 链接标志（指定链接脚本和代码起始地址）
 KBUILD_LDFLAGS := -m aarch64elf \
                   -T kernel/kernel.ld.s \
-                  -Ttext 0x40200000
+                  -Ttext 0x40080000
 
 # ===================== 核心目标 =====================
 # 默认目标：编译内核 + 生成二进制文件
