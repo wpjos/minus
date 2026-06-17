@@ -1,103 +1,117 @@
 #include "mm.h"
 #include "fdt.h"
 #include "printk.h"
+#include "stdbool.h"
 
 #define EARLY_MM_ALIGN		8UL
-#define MIN_BLOCK_SIZE		32UL
+#define MEMBLOCK_MAX_MEMORY	16
+#define MEMBLOCK_MAX_RESERVED	16
 
 #define ALIGN_UP(x, a)		(((x) + ((a) - 1)) & ~((a) - 1))
 #define ALIGN_DOWN(x, a)	((x) & ~((a) - 1))
 
 /*
- * Early memory allocator — embedded free list
+ * Linux-style memblock: physical memory and reserved regions are tracked
+ * in two small arrays.  The allocator is a simple bump allocator over the
+ * memory[] array after reserved regions have been carved out.
  *
- * Each memory block (free or allocated) starts with a size field.
- * The size field records the total block size including itself (8 bytes).
- *
- * Allocated block layout:
- *   [uint64_t size] [user data ...]
- *                    ^-- returned pointer
- *
- * Free block layout:
- *   [uint64_t size] [free_block *next] [unused ...]
- *
- * Free blocks are linked in an address-sorted singly-linked list.
- * This makes coalescing on free O(1) amortized (check prev/next neighbors).
- *
- * Unlike the old fixed-array design, metadata lives inside the memory blocks
- * themselves, so the number of allocations is limited only by physical memory,
- * not by a static array size.
+ * No free list, no coalescing, no sorting.  Early allocations are expected
+ * to live until the buddy/page allocator takes over.
  */
-struct free_block {
-	uint64_t size;            /* total block size including this field */
-	struct free_block *next;  /* free list link (only valid when free) */
+struct memblock_region {
+	uint64_t base;
+	uint64_t size;
 };
 
-/* Free list head (sorted by address) */
-static struct free_block *free_list;
+struct memblock {
+	struct memblock_region memory[MEMBLOCK_MAX_MEMORY];
+	int memory_cnt;
+	struct memblock_region reserved[MEMBLOCK_MAX_RESERVED];
+	int reserved_cnt;
+	bool initialized;
+};
 
-/* Stats */
+static struct memblock memblock;
 static uint64_t total_size;
-static uint64_t used_size;
 
-/*
- * Add a memory region to the allocator
- */
-static void early_mm_add_region(uint64_t base, uint64_t size)
+static void memblock_add_memory(uint64_t base, uint64_t size)
 {
-	uint64_t aligned_base = ALIGN_UP(base, EARLY_MM_ALIGN);
-	uint64_t aligned_end = ALIGN_DOWN(base + size, EARLY_MM_ALIGN);
-	uint64_t aligned_size = aligned_end - aligned_base;
-
-	if (aligned_size < MIN_BLOCK_SIZE)
+	if (memblock.memory_cnt >= MEMBLOCK_MAX_MEMORY || size == 0)
 		return;
+	memblock.memory[memblock.memory_cnt].base = base;
+	memblock.memory[memblock.memory_cnt].size = size;
+	memblock.memory_cnt++;
+	total_size += size;
+}
 
-	struct free_block *blk = (struct free_block *)(uintptr_t)aligned_base;
-	blk->size = aligned_size;
-	blk->next = free_list;
-	free_list = blk;
-
-	total_size += aligned_size;
+static void memblock_add_reserved(uint64_t base, uint64_t size)
+{
+	if (memblock.reserved_cnt >= MEMBLOCK_MAX_RESERVED || size == 0)
+		return;
+	memblock.reserved[memblock.reserved_cnt].base = base;
+	memblock.reserved[memblock.reserved_cnt].size = size;
+	memblock.reserved_cnt++;
 }
 
 /*
- * Sort the free list by address and merge adjacent blocks.
- * Called once after all regions are added during init.
+ * Carve [rbase, rend) out of the memory[] array.
+ * Handles remove / trim start / trim end / split.
  */
-static void early_mm_sort(void)
+static void memblock_carve(uint64_t rbase, uint64_t rend)
 {
-	/* Insertion sort by address (few regions expected) */
-	struct free_block *sorted = NULL;
-	struct free_block *cur = free_list;
+	int i;
 
-	while (cur) {
-		struct free_block *next = cur->next;
+	if (rbase >= rend)
+		return;
 
-		if (!sorted || cur < sorted) {
-			cur->next = sorted;
-			sorted = cur;
+	for (i = 0; i < memblock.memory_cnt; i++) {
+		struct memblock_region *m = &memblock.memory[i];
+		uint64_t mbase = m->base;
+		uint64_t mend = mbase + m->size;
+
+		/* No overlap */
+		if (rend <= mbase || rbase >= mend)
+			continue;
+
+		if (rbase <= mbase && rend >= mend) {
+			/* Reserved covers the whole region: remove it */
+			*m = memblock.memory[--memblock.memory_cnt];
+			i--;
+		} else if (rbase <= mbase && rend < mend) {
+			/* Overlaps start: trim from left */
+			m->base = rend;
+			m->size = mend - rend;
+		} else if (rbase > mbase && rend >= mend) {
+			/* Overlaps end: trim from right */
+			m->size = rbase - mbase;
 		} else {
-			struct free_block *p = sorted;
-			while (p->next && p->next < cur)
-				p = p->next;
-			cur->next = p->next;
-			p->next = cur;
+			/* Reserved sits in the middle: split */
+			uint64_t left_size = rbase - mbase;
+			uint64_t right_size = mend - rend;
+
+			m->size = left_size;
+
+			if (right_size > 0 &&
+			    memblock.memory_cnt < MEMBLOCK_MAX_MEMORY) {
+				memblock.memory[memblock.memory_cnt].base = rend;
+				memblock.memory[memblock.memory_cnt].size = right_size;
+				memblock.memory_cnt++;
+			}
 		}
-		cur = next;
 	}
+}
 
-	free_list = sorted;
+/*
+ * Carve all reserved regions from memory[] before enabling the allocator.
+ */
+static void memblock_carve_reserved(void)
+{
+	int i;
 
-	/* merge adjacent blocks */
-	cur = free_list;
-	while (cur && cur->next) {
-		if ((uint8_t *)cur + cur->size == (uint8_t *)cur->next) {
-			cur->size += cur->next->size;
-			cur->next = cur->next->next;
-			/* Don't advance — check if merged block is also adjacent */
-		} else {
-			cur = cur->next;
-		}
+	for (i = 0; i < memblock.reserved_cnt; i++) {
+		uint64_t rbase = memblock.reserved[i].base;
+		uint64_t rend = rbase + memblock.reserved[i].size;
+		memblock_carve(rbase, rend);
 	}
 }
 
@@ -117,12 +131,14 @@ static void early_mm_fdt_register_one(const fdt32_t *reg, uint64_t len,
 		for (j = i + size_cells; i < j; i++)
 			size = (size << 32) + fdt32_to_cpu(reg[i]);
 
-		early_mm_add_region(addr, size);
+		memblock_add_memory(addr, size);
 	}
 }
 
-static void early_mm_fdt_register_all(void *fdt, int root)
+static void early_mm_fdt_register_all(void)
 {
+	void *fdt = fdt_base();
+	int root = fdt_path_offset(fdt, "/");
 	int address_cells = fdt_address_cells(fdt, root);
 	int size_cells = fdt_size_cells(fdt, root);
 	int node, prop_len;
@@ -136,118 +152,74 @@ static void early_mm_fdt_register_all(void *fdt, int root)
 			continue;
 		early_mm_fdt_register_one(reg, prop_len, address_cells, size_cells);
 	}
-	early_mm_sort();
 }
 
 void early_mm_init(void)
 {
-	void *fdt = fdt_base();
-
-	if (!fdt)
-		return;
-
-	int root = fdt_path_offset(fdt, "/");
-	if (root < 0)
-		return;
-
-	early_mm_fdt_register_all(fdt, root);
+	extern char _start[], _end[];
+	struct memblock_region reserves[] = {
+		{(uint64_t)_start, (uint64_t)(_end - _start)},
+	};
+	int nr = sizeof(reserves) / sizeof(struct memblock_region);
+	for (int i = 0; i < nr; i++) {
+		early_mm_reserve(reserves[i].base, reserves[i].size);
+	}
+	early_mm_fdt_register_all();
+	memblock_carve_reserved();
+	memblock.initialized = true;
 
 	printk("early_mm: %d MB available\n", (int)(total_size / (1024 * 1024)));
 }
 
-void early_mm_reserve(void *ptr, uint64_t size)
+/*
+ * Reserve a physical memory region so it will not be allocated.
+ * May be called before early_mm_init() (recorded in memblock.reserved[])
+ * or after (carved directly out of memory[]).
+ */
+void early_mm_reserve(uint64_t base, uint64_t size)
 {
+	uint64_t rbase = ALIGN_UP(base, EARLY_MM_ALIGN);
+	uint64_t rend = ALIGN_DOWN(base + size, EARLY_MM_ALIGN);
+	uint64_t rsize;
+
+	if (rend <= rbase)
+		return;
+
+	rsize = rend - rbase;
+
+	if (!memblock.initialized)
+		memblock_add_reserved(rbase, rsize);
+	else
+		memblock_carve(rbase, rend);
 }
 
 /*
- * Allocate a block of the given size (8-byte aligned)
- * Uses first-fit search on the sorted free list
+ * Allocate a block of the given size (8-byte aligned).
+ * Simple bump allocator over the memory[] regions.
  */
 void *early_mm_alloc(uint64_t size)
 {
-	struct free_block *prev, *blk;
+	int i;
+	uint64_t alloc_size;
 
 	if (size == 0)
 		return NULL;
 
-	size = ALIGN_UP(size, EARLY_MM_ALIGN);
-	uint64_t total = size + sizeof(uint64_t);
+	alloc_size = ALIGN_UP(size, EARLY_MM_ALIGN);
 
-	/* First fit */
-	prev = NULL;
-	blk = free_list;
-	while (blk) {
-		if (blk->size >= total)
-			break;
-		prev = blk;
-		blk = blk->next;
+	for (i = 0; i < memblock.memory_cnt; i++) {
+		struct memblock_region *m = &memblock.memory[i];
+		uint64_t base = ALIGN_UP(m->base, EARLY_MM_ALIGN);
+		uint64_t end = m->base + m->size;
+
+		if (base + alloc_size > end)
+			continue;
+
+		/* Bump: shrink the region from the front */
+		m->base = base + alloc_size;
+		m->size = end - m->base;
+		return (void *)(uintptr_t)base;
 	}
 
-	if (!blk)
-		return NULL;
-
-	/* Split if remainder is large enough */
-	if (blk->size >= total + MIN_BLOCK_SIZE) {
-		struct free_block *rem = (struct free_block *)((uint8_t *)blk + total);
-		rem->size = blk->size - total;
-		rem->next = blk->next;
-
-		if (prev)
-			prev->next = rem;
-		else
-			free_list = rem;
-
-		blk->size = total;
-	} else {
-		/* Use entire block */
-		total = blk->size;
-		if (prev)
-			prev->next = blk->next;
-		else
-			free_list = blk->next;
-	}
-
-	used_size += total;
-	return (void *)((uint8_t *)blk + sizeof(uint64_t));
-}
-
-/*
- * Free a previously allocated block
- * Inserts back into sorted free list and coalesces with neighbors
- */
-void early_mm_free(void *ptr)
-{
-	struct free_block *blk, *prev, *ins;
-
-	if (!ptr)
-		return;
-
-	blk = (struct free_block *)((uint8_t *)ptr - sizeof(uint64_t));
-	used_size -= blk->size;
-
-	/* Insert into sorted free list */
-	prev = NULL;
-	ins = free_list;
-	while (ins && ins < blk) {
-		prev = ins;
-		ins = ins->next;
-	}
-
-	blk->next = ins;
-	if (prev)
-		prev->next = blk;
-	else
-		free_list = blk;
-
-	/* Coalesce with next neighbor */
-	if (blk->next && (uint8_t *)blk + blk->size == (uint8_t *)blk->next) {
-		blk->size += blk->next->size;
-		blk->next = blk->next->next;
-	}
-
-	/* Coalesce with previous neighbor */
-	if (prev && (uint8_t *)prev + prev->size == (uint8_t *)blk) {
-		prev->size += blk->size;
-		prev->next = blk->next;
-	}
+	return NULL;
 }

@@ -5,6 +5,6 @@
 
 void early_mm_init(void);
 void *early_mm_alloc(uint64_t size);
-void early_mm_free(void *ptr);
+void early_mm_reserve(uint64_t base, uint64_t size);
 
 #endif
