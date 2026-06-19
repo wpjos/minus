@@ -7,9 +7,6 @@
 #define MEMBLOCK_MAX_MEMORY	16
 #define MEMBLOCK_MAX_RESERVED	16
 
-#define ALIGN_UP(x, a)		(((x) + ((a) - 1)) & ~((a) - 1))
-#define ALIGN_DOWN(x, a)	((x) & ~((a) - 1))
-
 /*
  * Linux-style memblock: physical memory and reserved regions are tracked
  * in two small arrays.  The allocator is a simple bump allocator over the

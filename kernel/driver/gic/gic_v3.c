@@ -402,7 +402,7 @@ int gic_irq_set_group(unsigned int irq, unsigned int group)
 /*
  * IRQ handler registration and dispatch
  */
-int request_irq(unsigned int irq, irq_handler_t handler, void *dev_id)
+int gic_request_irq(unsigned int irq, irq_handler_t handler, void *dev_id)
 {
 	if (irq >= GIC_MAX_HANDLERS)
 		return -1;
@@ -410,16 +410,6 @@ int request_irq(unsigned int irq, irq_handler_t handler, void *dev_id)
 	g_handlers[irq] = handler;
 	g_handler_data[irq] = dev_id;
 	return 0;
-}
-
-int enable_irq(unsigned int irq)
-{
-	return gic_irq_enable(irq);
-}
-
-int disable_irq(unsigned int irq)
-{
-	return gic_irq_disable(irq);
 }
 
 void gic_handle_irq(void)

@@ -149,6 +149,7 @@ int gic_irq_disable(unsigned int irq);
 int gic_irq_set_priority(unsigned int irq, uint8_t prio);
 int gic_irq_set_type(unsigned int irq, unsigned int type);
 int gic_irq_set_group(unsigned int irq, unsigned int group);
+int gic_request_irq(unsigned int irq, irq_handler_t handler, void *dev_id);
 void gic_handle_irq(void);
 
 #endif /* __GIC_V3_H__ */

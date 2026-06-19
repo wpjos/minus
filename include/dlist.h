@@ -12,6 +12,8 @@ void dlist_add(struct dlist_node *head, struct dlist_node *node);
 void dlist_del(struct dlist_node *node);
 void dlist_init(struct dlist_node *node);
 
+#define dlist_empty(head)	((head)->next == (head))
+
 #define dlist_first_entry(head, type, member) \
     container_of((head)->next, type, member)
 
