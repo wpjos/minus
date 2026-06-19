@@ -19,7 +19,11 @@ TARGET        := $(OUTPUT)/kernel.elf
 BIN_TARGET    := $(OUTPUT)/kernel.bin
 
 # 编译标志（AArch64 裸机必备）
-KBUILD_CFLAGS := -I ${TOPDIR}/include \
+KBUILD_CFLAGS := -I $(TOPDIR)/include/base \
+		 -I $(TOPDIR)/include/kernel \
+		 -I $(TOPDIR)/include/driver \
+		 -I $(TOPDIR)/include/arch \
+		 -I $(TOPDIR)/include/fdt \
 		 -I $(TOPDIR)/lib/libfdt \
 		 -D__MINUS__ \
                  -march=armv8-a \

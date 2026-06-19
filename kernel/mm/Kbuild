@@ -1,0 +1,5 @@
+obj-y := early_mm.o buddy.o slab.o
+
+ccflags-y := -I$(TOPDIR)/kernel/mm
+
+include $(TOPDIR)/scripts/Kbuild.include

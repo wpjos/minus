@@ -1,5 +1,4 @@
-obj-y := $(patsubst %.c,%.o,$(wildcard *.c))
-obj-y += $(patsubst %.S,%.o,$(wildcard *.S))
+obj-y := init.o printk.o
 obj-y += mm/
 obj-y += arch/
 obj-y += driver/

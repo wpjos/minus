@@ -1,4 +1,4 @@
-obj-y := $(patsubst %.c,%.o,$(wildcard *.c))
+obj-y := dlist.o rbtree.o string.o
 obj-y += libfdt/
 
 include $(TOPDIR)/scripts/Kbuild.include

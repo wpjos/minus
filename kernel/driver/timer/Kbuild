@@ -1,3 +1,5 @@
 obj-y += generic_timer.o
 
+ccflags-y := -I$(TOPDIR)/kernel/driver/timer
+
 include $(TOPDIR)/scripts/Kbuild.include

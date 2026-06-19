@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "sysreg.h"
+#include "irq.h"
 
 /*
  * GICv3 Distributor register offsets

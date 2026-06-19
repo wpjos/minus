@@ -4,7 +4,7 @@
 #include "printk.h"
 
 struct free_area g_free_area[BUDDY_MAX_ORDER];
-struct page *mem_map;
+struct page *g_mem_pages;
 
 static size_t get_order(size_t size)
 {

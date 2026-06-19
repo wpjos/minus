@@ -1,6 +1,7 @@
 #ifndef __PAGE_H
 #define __PAGE_H
 
+#include "types.h"
 #include "dlist.h"
 
 struct page {
@@ -23,11 +24,18 @@ struct page {
 #define PHYS_OFFSET		0x40000000UL
 #endif
 
+#ifndef __VA_PA__
+#define __VA_PA__(x)		((unsigned long)(x))
+#endif
+#ifndef __PA_VA__
+#define __PA_VA__(x)		((unsigned long)(x))
+#endif
+
 extern struct page *g_mem_pages;
 #define phy_to_pfn(paddr)	((size_t)(paddr >> PAGE_BITS))
 #define pfn_to_phy(pfn)		((pfn) << PAGE_BITS)
 
-#define PFN_OFFSET		(phy_to_pfn(PHY_RAM_BASE))
+#define PFN_OFFSET		(phy_to_pfn(PHYS_OFFSET))
 #define pfn_to_page(pfn)	(&g_mem_pages[pfn - PFN_OFFSET])
 #define page_to_pfn(page)	((size_t)(page - g_mem_pages + PFN_OFFSET))
 
@@ -35,5 +43,5 @@ extern struct page *g_mem_pages;
 #define phy_to_page(paddr)	(pfn_to_page(phy_to_pfn(paddr)))
 
 #define virt_to_page(vaddr)	(phy_to_page(__VA_PA__(vaddr)))
-#define page_to_virt(page)	(__PA_VA__(page_to_phy(page)))
+#define page_to_virt(page)	((void *)__PA_VA__(page_to_phy(page)))
 #endif
