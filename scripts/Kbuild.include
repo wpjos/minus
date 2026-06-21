@@ -26,9 +26,14 @@ objs := $(addprefix $(OBJDIR)/, $(obj-files))
 built-in.o: $(objs) $(subdir-objs)
 	$(LD) -r -o $@ $^
 
+# ===================== 实现：链接脚本预处理 (.ld.s -> .ld) =====================
+$(OUTPUT)/kernel.ld: $(TOPDIR)/kernel/kernel.ld.s $(TOPDIR)/include/arch/memory.h
+	@mkdir -p $(dir $@)
+	$(CC) -E -P -C -xc -D__LINKER__ $(CPPFLAGS) -o $@ $<
+
 # ===================== 实现：最终内核链接 =====================
-$(OUTPUT)/kernel.elf: $(subdir-objs)
-	$(LD) $(LDFLAGS) -o $@ $^
+$(OUTPUT)/kernel.elf: $(subdir-objs) $(OUTPUT)/kernel.ld
+	$(LD) $(LDFLAGS) -o $@ $(subdir-objs)
 
 # ===================== 实现：子目录递归编译 =====================
 $(OUTPUT)/.tmp/%/built-in.o:

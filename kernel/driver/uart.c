@@ -2,6 +2,7 @@
 #include "platform.h"
 #include "module.h"
 #include "types.h"
+#include "mmu.h"
 
 /* PL011 UART register offsets */
 #define UART_DR(base)	(*(volatile uint32_t *)((base) + 0x00))
@@ -30,6 +31,9 @@ static int uart_probe(struct platform_device *pdev)
 {
 	struct resource *res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
+		return -1;
+
+	if (!early_mmu_ioremap(res->start, resource_size(res)))
 		return -1;
 
 	g_uart_base = res->start;

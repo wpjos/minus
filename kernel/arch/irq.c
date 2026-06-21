@@ -1,6 +1,5 @@
 #include "irq.h"
 #include "gic_v3.h"
-#include "printk.h"
 #include "types.h"
 
 /* Defined in vectors.S */
@@ -25,16 +24,11 @@ void handle_irq_exception(struct pt_regs *regs)
 void handle_fiq_exception(struct pt_regs *regs)
 {
 	(void)regs;
-	printk("fiq: unexpected FIQ\n");
 }
 
 void handle_bad_exception(struct pt_regs *regs)
 {
-	printk("fatal exception\n");
-	printk("  elr=%p  spsr=%p  esr=%p\n",
-	       (void *)regs->elr, (void *)regs->spsr, (void *)regs->esr);
-	while (1)
-		;
+	while (1);
 }
 
 void irq_init(void)

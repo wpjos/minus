@@ -1,4 +1,5 @@
 #include "mm.h"
+#include "page.h"
 #include "fdt.h"
 #include "printk.h"
 #include "stdbool.h"
@@ -153,9 +154,9 @@ static void early_mm_fdt_register_all(void)
 
 void early_mm_init(void)
 {
-	extern char _start[], _end[];
+	extern char __image_start[], __image_end[];
 	struct memblock_region reserves[] = {
-		{(uint64_t)_start, (uint64_t)(_end - _start)},
+		{__VA_PA__(__image_start), (uint64_t)(__image_end - __image_start)},
 	};
 	int nr = sizeof(reserves) / sizeof(struct memblock_region);
 	for (int i = 0; i < nr; i++) {

@@ -1,8 +1,8 @@
 #include "gic_v3.h"
 #include "platform.h"
 #include "module.h"
-#include "printk.h"
 #include "irq.h"
+#include "mmu.h"
 
 /* Cached MMIO bases */
 static uint64_t g_gicd_base;
@@ -306,7 +306,11 @@ static int gic_probe(struct platform_device *pdev)
 	res_d = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	res_r = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (!res_d || !res_r) {
-		printk("gic: missing reg resources\n");
+		return -1;
+	}
+
+	if (!early_mmu_ioremap(res_d->start, resource_size(res_d)) ||
+	    !early_mmu_ioremap(res_r->start, resource_size(res_r))) {
 		return -1;
 	}
 
@@ -314,16 +318,11 @@ static int gic_probe(struct platform_device *pdev)
 	g_gicr_base = res_r->start;
 	g_gicr_size = resource_size(res_r);
 
-	printk("gic: dist=%p, redist=%p size=%p\n",
-	       (void *)g_gicd_base, (void *)g_gicr_base, (void *)g_gicr_size);
-
 	gic_redist_wake();
 	gic_dist_init();
 	gic_redist_init();
 	gic_cpu_init();
 
-	printk("gic: initialized, %d SPIs, ctlr=%p\n", g_nr_spis,
-	       (void *)(uint64_t)gicd_read32(GICD_CTLR));
 	return 0;
 }
 
@@ -426,8 +425,6 @@ void gic_handle_irq(void)
 	handler = g_handlers[irq];
 	if (handler)
 		handler(irq, g_handler_data[irq]);
-	else
-		printk("gic: unhandled irq %u\n", irq);
 
 	gic_set_icc_eoir1_el1(irq);
 }

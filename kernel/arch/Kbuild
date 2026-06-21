@@ -1,4 +1,4 @@
-obj-y := irq.o start.o vectors.o
+obj-y := irq.o start.o vectors.o mmu.o
 
 ccflags-y := -I$(TOPDIR)/kernel/driver/gic
 

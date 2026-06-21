@@ -1,9 +1,11 @@
+#include "memory.h"
 OUTPUT_ARCH(aarch64)
 ENTRY(_start)
 SECTIONS
 {
-	. = 0x0;
-	.text : {
+	. = VIRT_LOAD_OFFSET;
+	__image_start = .;
+	.text : AT(.text) {
 		*(.text.head)
 		*(.text)
 	}
@@ -28,6 +30,14 @@ SECTIONS
 		*(.dtb);
 		__dtb_end = .;
 	}
+	.init.pgtable : {
+		. = ALIGN(4096);
+		__init_pgd = .;
+		. += 3 * PAGE_SIZE;
+		__idmap_pgd = .;
+		. += 3 * PAGE_SIZE;
+	}
+
 	.data : {
 		. = ALIGN(4096);
 		*(.init.stack)
@@ -38,5 +48,5 @@ SECTIONS
 	.bss : { *(.bss) }
 
 	. = ALIGN(4096);
-	_end = .;
+	__image_end = .;
 }

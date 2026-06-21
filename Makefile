@@ -5,6 +5,13 @@ MINUS_VERSION := 0.1
 MINUS_ARCH    := aarch64
 MINUS_PLAT    := qemu-virt
 
+# Platform-specific physical load address.
+# Different machines may load the kernel image at different physical addresses;
+# keep this in the build system rather than hardcoding it in headers.
+ifeq ($(MINUS_PLAT),qemu-virt)
+MINUS_PHYS_LOAD_OFFSET := 0x40080000
+endif
+
 # 交叉编译器配置（Linux 内核风格）
 CROSS_COMPILE ?= aarch64-elf-
 CC            := $(CROSS_COMPILE)gcc
@@ -18,13 +25,17 @@ OUTPUT        := $(TOPDIR)/output
 TARGET        := $(OUTPUT)/kernel.elf
 BIN_TARGET    := $(OUTPUT)/kernel.bin
 
+# 公共头文件搜索路径（C/汇编/链接脚本预处理共用）
+KBUILD_CPPFLAGS := -I $(TOPDIR)/include/base \
+                   -I $(TOPDIR)/include/kernel \
+                   -I $(TOPDIR)/include/driver \
+                   -I $(TOPDIR)/include/arch \
+                   -I $(TOPDIR)/include/fdt \
+                   -I $(TOPDIR)/lib/libfdt \
+                   -DPHYS_LOAD_OFFSET=$(MINUS_PHYS_LOAD_OFFSET)
+
 # 编译标志（AArch64 裸机必备）
-KBUILD_CFLAGS := -I $(TOPDIR)/include/base \
-		 -I $(TOPDIR)/include/kernel \
-		 -I $(TOPDIR)/include/driver \
-		 -I $(TOPDIR)/include/arch \
-		 -I $(TOPDIR)/include/fdt \
-		 -I $(TOPDIR)/lib/libfdt \
+KBUILD_CFLAGS := $(KBUILD_CPPFLAGS) \
 		 -D__MINUS__ \
                  -march=armv8-a \
                  -mgeneral-regs-only \
@@ -34,10 +45,9 @@ KBUILD_CFLAGS := -I $(TOPDIR)/include/base \
                  -Wall \
                  -Werror  # 警告视为错误（强制规范代码）
 
-# 链接标志（指定链接脚本和代码起始地址）
+# 链接标志（指定预处理后生成的链接脚本）
 KBUILD_LDFLAGS := -m aarch64elf \
-                  -T kernel/kernel.ld.s \
-                  -Ttext 0x40080000
+                  -T $(OUTPUT)/kernel.ld
 
 # ===================== 核心目标 =====================
 # 默认目标：编译内核 + 生成二进制文件
@@ -59,6 +69,7 @@ $(TARGET):
 	        LD=$(LD) \
 		OBJCOPY=${OBJCOPY} \
 	        CFLAGS="$(KBUILD_CFLAGS)" \
+	        CPPFLAGS="$(KBUILD_CPPFLAGS)" \
 	        LDFLAGS="$(KBUILD_LDFLAGS)" \
 	        OUTPUT=$(OUTPUT) \
 	        TOPDIR=$(TOPDIR)

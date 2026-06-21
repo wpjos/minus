@@ -10,7 +10,7 @@ static size_t get_order(size_t size)
 {
 	size_t order = 0;
 
-	size = PAGE_ALIGN(size) >> PAGE_BITS;
+	size = PAGE_ALIGN(size) >> PAGE_SHIFT;
 	while ((1 << order) < size && order < BUDDY_MAX_ORDER) {
 		order++;
 	}

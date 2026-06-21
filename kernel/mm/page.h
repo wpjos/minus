@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "dlist.h"
+#include "memory.h"
 
 struct page {
 	struct dlist_node dnode;
@@ -11,31 +12,19 @@ struct page {
 	size_t in_slab: 1;
 };
 
-#define PAGE_BITS		(12UL)
-#define PAGE_SIZE		(1UL << PAGE_BITS)
-#define PAGE_MASK		(~(PAGE_SIZE - 1))
 #define PAGE_ALIGN(x)		(((uintptr_t)x + PAGE_SIZE - 1) & PAGE_MASK)
 
 /*
- * Linear page-table assumptions (MMU off / identity mapped).
- * PHYS_OFFSET is platform specific; default to qemu-virt RAM base.
+ * Linear page-table assumptions with a fixed VA/PA offset.
+ * The kernel is linked at high virtual addresses but loaded at low physical
+ * addresses; LOAD_OFFSET (from memory.h) is used for runtime conversion.
  */
-#ifndef PHYS_OFFSET
-#define PHYS_OFFSET		0x40000000UL
-#endif
-
-#ifndef __VA_PA__
-#define __VA_PA__(x)		((unsigned long)(x))
-#endif
-#ifndef __PA_VA__
-#define __PA_VA__(x)		((unsigned long)(x))
-#endif
 
 extern struct page *g_mem_pages;
-#define phy_to_pfn(paddr)	((size_t)(paddr >> PAGE_BITS))
-#define pfn_to_phy(pfn)		((pfn) << PAGE_BITS)
+#define phy_to_pfn(paddr)	((size_t)(paddr >> PAGE_SHIFT))
+#define pfn_to_phy(pfn)		((pfn) << PAGE_SHIFT)
 
-#define PFN_OFFSET		(phy_to_pfn(PHYS_OFFSET))
+#define PFN_OFFSET		(phy_to_pfn(PHYS_LOAD_OFFSET))
 #define pfn_to_page(pfn)	(&g_mem_pages[pfn - PFN_OFFSET])
 #define page_to_pfn(page)	((size_t)(page - g_mem_pages + PFN_OFFSET))
 
