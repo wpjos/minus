@@ -1,4 +1,4 @@
-obj-y := early_mm.o buddy.o slab.o
+obj-y := early_mm.o buddy.o slab.o paging.o
 
 ccflags-y := -I$(TOPDIR)/kernel/mm
 

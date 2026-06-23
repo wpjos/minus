@@ -309,13 +309,11 @@ static int gic_probe(struct platform_device *pdev)
 		return -1;
 	}
 
-	if (!early_mmu_ioremap(res_d->start, resource_size(res_d)) ||
-	    !early_mmu_ioremap(res_r->start, resource_size(res_r))) {
+	g_gicd_base = (uint64_t)mmu_ioremap(res_d->start, resource_size(res_d));
+	g_gicr_base = (uint64_t)mmu_ioremap(res_r->start, resource_size(res_r));
+	if (!g_gicd_base || !g_gicr_base)
 		return -1;
-	}
 
-	g_gicd_base = res_d->start;
-	g_gicr_base = res_r->start;
 	g_gicr_size = resource_size(res_r);
 
 	gic_redist_wake();

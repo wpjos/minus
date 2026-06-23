@@ -41,8 +41,8 @@ typedef __s8   int8_t;
 #define offsetof(TYPE, MEMBER) ((uintptr_t) &((TYPE *)0)->MEMBER)
 #endif
 
-#define ALIGN_UP(x, a)		(((x) + ((a) - 1)) & ~((a) - 1))
-#define ALIGN_DOWN(x, a)	((x) & ~((a) - 1))
+#define ALIGN_UP(x, a)		(((x) + ((uintptr_t)(a) - 1)) & ~((uintptr_t)(a) - 1))
+#define ALIGN_DOWN(x, a)	((x) & ~((uintptr_t)(a) - 1))
 
 #define container_of(ptr, type, member) ({			\
 	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\

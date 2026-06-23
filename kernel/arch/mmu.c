@@ -3,6 +3,9 @@
 #include "sysreg.h"
 #include "mmu.h"
 #include "memory.h"
+#include "mm.h"
+#include "page.h"
+#include "buddy.h"
 
 /*
  * Early stage-1 page tables for 48-bit VA, 4 KB granule.
@@ -24,8 +27,8 @@
  * runtime MMIO, and one for the kernel's high virtual mapping.  The linker
  * reserves three contiguous 4 KB pages per table (PGD, PUD, PMD).
  */
-extern uint64_t __init_pgd[LEVEL_N * PTE_ENTRIES];
-extern uint64_t __idmap_pgd[LEVEL_N * PTE_ENTRIES];
+extern uint64_t __attribute__((visibility("hidden"))) __init_pgd[LEVEL_N * PTE_ENTRIES];
+extern uint64_t __attribute__((visibility("hidden"))) __idmap_pgd[LEVEL_N * PTE_ENTRIES];
 
 static const uint32_t shift_table[LEVEL_N] = {PGD_SHIFT, PUD_SHIFT, PMD_SHIFT};
 
@@ -88,7 +91,7 @@ static void early_mmu_map_block(uint64_t *tbl, uint64_t va, uint64_t pa,
  */
 #define EARLY_MMU_BUG(cond)     do { if (cond) { while (1); } } while (0)
 
-static void early_mmu_map_range(uint64_t *tbl,
+static void early_mmu_map_blocks(uint64_t *tbl,
                                 uint64_t va, uint64_t pa,
                                 uint64_t size, uint64_t attr)
 {
@@ -105,7 +108,7 @@ static void early_mmu_map_range(uint64_t *tbl,
     }
 }
 
-static void mmu_sync(void)
+void mmu_sync(void)
 {
     __asm__ volatile("dsb sy" ::: "memory");
     __asm__ volatile("tlbi vmalle1" ::: "memory");
@@ -115,7 +118,7 @@ static void mmu_sync(void)
 
 void early_mmu_init(void)
 {
-    extern char __image_start[], __image_end[];
+    extern char __attribute__((visibility("hidden"))) __image_start[], __image_end[];
     uint64_t image_start_pa = (uint64_t)__image_start;
     uint64_t image_start_va = __PA_VA__(image_start_pa);
     uint64_t image_size = (uint64_t)__image_end - (uint64_t)__image_start;
@@ -128,14 +131,14 @@ void early_mmu_init(void)
      * Identity-map the kernel physical load region so execution survives
      * the MMU-enable moment while the CPU is still at a physical PC.
      */
-    early_mmu_map_range(__idmap_pgd, image_start_pa, image_start_pa,
+    early_mmu_map_blocks(__idmap_pgd, image_start_pa, image_start_pa,
                         image_size, MMU_REGION_NORMAL);
 
     /*
      * Map the kernel at its linked high virtual address.
      * This is the mapping the kernel uses once it jumps to VA space.
      */
-    early_mmu_map_range(__init_pgd, image_start_va, image_start_pa,
+    early_mmu_map_blocks(__init_pgd, image_start_va, image_start_pa,
                         image_size, MMU_REGION_NORMAL);
 
     /*
@@ -163,14 +166,113 @@ void early_mmu_init(void)
     __asm__ volatile("isb" ::: "memory");
 }
 
-/*
- * Runtime region mapping (called by drivers after early_mmu_init).
- * Maps [phys, phys+size) as Device-nGnRnE and returns the virtual address.
- * Devices are kept identity-mapped, so the returned VA equals @phys.
- */
-void *early_mmu_ioremap(uint64_t pa, uint64_t size)
+static void mmu_panic(void)
 {
-    early_mmu_map_range(__idmap_pgd, pa, pa, size, MMU_REGION_DEVICE);
+    while (1);
+}
+
+static bool mmu_paging_ready = false;
+
+void mmu_set_paging_ready(void)
+{
+    mmu_paging_ready = true;
+}
+
+/*
+ * Allocate a fresh PMD page.
+ * Before paging_init() finishes we are still using the identity-mapped early
+ * allocator; afterwards the buddy allocator is available.
+ */
+static uint64_t mmu_alloc_pmd_page(void)
+{
+    if (!mmu_paging_ready) {
+        uint64_t *p = early_mm_alloc_aligned(PAGE_SIZE, PAGE_SIZE);
+        if (!p)
+            return 0;
+        /* Identity-mapped early RAM: virtual address equals physical address. */
+        return (uint64_t)p;
+    }
+
+    struct page *page = buddy_alloc_pages(PAGE_SIZE);
+    if (!page)
+        return 0;
+    return page_to_phy(page);
+}
+
+/*
+ * Return a pointer (identity-mapped) to the PMD descriptor that maps @va.
+ * Allocates a new PMD page if the PUD entry is not yet valid.
+ */
+static uint64_t *mmu_pmd_desc(uint64_t va)
+{
+    uint64_t *pgd_desc = &__init_pgd[((va >> PGD_SHIFT) & (PTE_ENTRIES - 1))];
+    uint64_t pud_phys = __VA_PA__(&__init_pgd[PTE_ENTRIES]);
+    uint64_t *pud_page = &__init_pgd[PTE_ENTRIES];
+    uint64_t *pud_desc;
+    uint64_t pmd_phys;
+    uint64_t *pmd;
+
+    if ((*pgd_desc & PTE_TYPE_MASK) != PTE_TYPE_TABLE)
+        *pgd_desc = PTE_TABLE(pud_phys);
+
+    pud_desc = &pud_page[((va >> PUD_SHIFT) & (PTE_ENTRIES - 1))];
+
+    if ((*pud_desc & PTE_TYPE_MASK) != PTE_TYPE_TABLE) {
+        pmd_phys = mmu_alloc_pmd_page();
+        if (!pmd_phys)
+            mmu_panic();
+        memset((void *)__PA_VA__(pmd_phys), 0, PAGE_SIZE);
+        *pud_desc = PTE_TABLE(pmd_phys);
+    } else {
+        pmd_phys = *pud_desc & PTE_PHYS_MASK;
+    }
+
+    pmd = (uint64_t *)__PA_VA__(pmd_phys);
+    return &pmd[((va >> PMD_SHIFT) & (PTE_ENTRIES - 1))];
+}
+
+/*
+ * Map [va, va+size) -> [pa, pa+size) in __init_pgd using 2 MB blocks.
+ * Both @va and @pa must have the same 2 MB offset.
+ */
+void mmu_map_blocks(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr)
+{
+    uint64_t start_va = va & ~(BLOCK_SIZE - 1);
+    uint64_t start_pa = pa & ~(BLOCK_SIZE - 1);
+    uint64_t limit = ALIGN_UP(va + size, BLOCK_SIZE);
+    uint64_t blk_va, blk_pa;
+    uint64_t *desc;
+
+    if ((va & (BLOCK_SIZE - 1)) != (pa & (BLOCK_SIZE - 1)))
+        mmu_panic();
+
+    for (blk_va = start_va, blk_pa = start_pa; blk_va < limit;
+         blk_va += BLOCK_SIZE, blk_pa += BLOCK_SIZE) {
+        desc = mmu_pmd_desc(blk_va);
+        *desc = PTE_BLOCK(blk_pa, attr);
+    }
+}
+
+void mmu_disable_ttbr0(void)
+{
+    uint64_t tcr = sys_reg_read(TCR_EL1);
+    tcr |= (1ULL << 7);          /* EPD0: disable TTBR0 walks */
+    sys_reg_write(TCR_EL1, tcr);
+    __asm__ volatile("isb" ::: "memory");
+    sys_reg_write(TTBR0_EL1, 0);
+    __asm__ volatile("isb" ::: "memory");
     mmu_sync();
-    return (void *)(uintptr_t)pa;
+}
+
+/*
+ * Runtime region mapping (called by drivers after paging_init).
+ * Maps [phys, phys+size) as Device-nGnRnE in the kernel page table and
+ * returns the kernel virtual address.
+ */
+void *mmu_ioremap(uint64_t pa, uint64_t size)
+{
+    uint64_t va = __PA_VA__(pa);
+    mmu_map_blocks(va, pa, size, MMU_REGION_DEVICE);
+    mmu_sync();
+    return (void *)va;
 }

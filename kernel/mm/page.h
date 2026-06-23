@@ -24,9 +24,9 @@ extern struct page *g_mem_pages;
 #define phy_to_pfn(paddr)	((size_t)(paddr >> PAGE_SHIFT))
 #define pfn_to_phy(pfn)		((pfn) << PAGE_SHIFT)
 
-#define PFN_OFFSET		(phy_to_pfn(PHYS_LOAD_OFFSET))
-#define pfn_to_page(pfn)	(&g_mem_pages[pfn - PFN_OFFSET])
-#define page_to_pfn(page)	((size_t)(page - g_mem_pages + PFN_OFFSET))
+extern size_t g_pfn_offset;
+#define pfn_to_page(pfn)	(&g_mem_pages[(pfn) - g_pfn_offset])
+#define page_to_pfn(page)	((size_t)((page) - g_mem_pages + g_pfn_offset))
 
 #define page_to_phy(page)	(pfn_to_phy(page_to_pfn(page)))
 #define phy_to_page(paddr)	(pfn_to_page(phy_to_pfn(paddr)))

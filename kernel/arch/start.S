@@ -22,6 +22,9 @@ _start:
 	ldr	x0, =1f
 	br	x0
 1:
+	/* Execution is now at high VA; switch the stack pointer to high VA too. */
+	ldr	x20, =_stack
+	mov	sp, x20
 	bl	start_kernel
 
 .section ".bss.stack", "aw", %nobits

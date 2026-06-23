@@ -30,7 +30,8 @@ struct memblock {
 };
 
 static struct memblock memblock;
-static uint64_t total_size;
+static uint64_t memory_start = ~0ULL;
+static uint64_t memory_end;
 
 static void memblock_add_memory(uint64_t base, uint64_t size)
 {
@@ -39,7 +40,13 @@ static void memblock_add_memory(uint64_t base, uint64_t size)
 	memblock.memory[memblock.memory_cnt].base = base;
 	memblock.memory[memblock.memory_cnt].size = size;
 	memblock.memory_cnt++;
-	total_size += size;
+
+	if (base < memory_start) {
+		memory_start = base;
+	}
+	if (base + size > memory_end) {
+		memory_end = base + size;
+	}
 }
 
 static void memblock_add_reserved(uint64_t base, uint64_t size)
@@ -165,8 +172,18 @@ void early_mm_init(void)
 	early_mm_fdt_register_all();
 	memblock_carve_reserved();
 	memblock.initialized = true;
+	early_mm_stat();
+}
 
-	printk("early_mm: %d MB available\n", (int)(total_size / (1024 * 1024)));
+void early_mm_stat(void)
+{
+	int total_size = 0;
+	for (int i = 0; i < memblock.memory_cnt; i++) {
+		total_size += memblock.memory[i].size;
+		printk("i = %d addr = %p size = %p\n", i, memblock.memory[i].base, memblock.memory[i].size);
+	}
+
+	printk("early_mm: %d MB available\n", total_size / (1024 * 1024));
 }
 
 /*
@@ -192,10 +209,10 @@ void early_mm_reserve(uint64_t base, uint64_t size)
 }
 
 /*
- * Allocate a block of the given size (8-byte aligned).
+ * Allocate a block of the given size aligned to @align.
  * Simple bump allocator over the memory[] regions.
  */
-void *early_mm_alloc(uint64_t size)
+void *early_mm_alloc_aligned(uint64_t size, uint64_t align)
 {
 	int i;
 	uint64_t alloc_size;
@@ -203,11 +220,11 @@ void *early_mm_alloc(uint64_t size)
 	if (size == 0)
 		return NULL;
 
-	alloc_size = ALIGN_UP(size, EARLY_MM_ALIGN);
+	alloc_size = ALIGN_UP(size, align);
 
 	for (i = 0; i < memblock.memory_cnt; i++) {
 		struct memblock_region *m = &memblock.memory[i];
-		uint64_t base = ALIGN_UP(m->base, EARLY_MM_ALIGN);
+		uint64_t base = ALIGN_UP(m->base, align);
 		uint64_t end = m->base + m->size;
 
 		if (base + alloc_size > end)
@@ -220,4 +237,32 @@ void *early_mm_alloc(uint64_t size)
 	}
 
 	return NULL;
+}
+
+uint64_t early_mm_memory_start(void)
+{
+	return memory_start;
+}
+
+uint64_t early_mm_memory_end(void)
+{
+	return memory_end;
+}
+
+int early_mm_memory_region_count(void)
+{
+	return memblock.memory_cnt;
+}
+
+void early_mm_memory_region(int idx, uint64_t *base, uint64_t *size)
+{
+	if (idx < 0 || idx >= memblock.memory_cnt) {
+		return;
+	}
+	if (base) {
+		*base = memblock.memory[idx].base;
+	}
+	if (size) {
+		*size = memblock.memory[idx].size;
+	}
 }

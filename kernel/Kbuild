@@ -3,4 +3,6 @@ obj-y += mm/
 obj-y += arch/
 obj-y += driver/
 
+ccflags-y := -I$(TOPDIR)/kernel/mm
+
 include $(TOPDIR)/scripts/Kbuild.include

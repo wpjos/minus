@@ -3,11 +3,11 @@
 #include "fdt.h"
 #include "string.h"
 #include "types.h"
+#include "mm.h"
+#include "slab.h"
+#include "memory.h"
 
 #define MAX_PLATFORM_DEVICES	64
-
-static struct platform_device of_devices[MAX_PLATFORM_DEVICES];
-static int of_device_count;
 
 const void *of_get_property(const void *fdt, int nodeoffset,
 			    const char *name, int *lenp)
@@ -324,10 +324,9 @@ int of_platform_populate(const void *fdt)
 		if (!compat)
 			continue;
 
-		if (of_device_count >= MAX_PLATFORM_DEVICES)
-			break;
-
-		pdev = &of_devices[of_device_count];
+		pdev = (struct platform_device *)kmalloc(sizeof(struct platform_device));
+		if (!pdev)
+			continue;
 		memset(pdev, 0, sizeof(*pdev));
 
 		pdev->dev.name = name;
@@ -358,7 +357,6 @@ int of_platform_populate(const void *fdt)
 		pdev->num_resources += count;
 
 		platform_device_register(pdev);
-		of_device_count++;
 	}
 
 	return 0;

@@ -80,7 +80,7 @@
 #define EARLY_PGTABLE_PAGES (EARLY_PGD_PAGES + EARLY_PUD_PAGES + EARLY_PMD_PAGES)
 #define EARLY_PGTABLE_SIZE  (EARLY_PGTABLE_PAGES * 4096)
 
-/* Region attributes passed to early_mmu_map_range() */
+/* Region attributes passed to early_mmu_map_blocks() */
 #define MMU_REGION_NORMAL   (PTE_ATTR_NORMAL | PTE_SH_INNER | PTE_AP_RW_EL1)
 #define MMU_REGION_DEVICE   (PTE_ATTR_DEVICE | PTE_AP_RW_EL1 | PTE_PXN | PTE_UXN)
 #define MMU_REGION_NORMAL_RO    (PTE_ATTR_NORMAL | PTE_SH_INNER | PTE_AP_RO_EL1)
@@ -134,6 +134,15 @@
 #define MMU_SCTLR_ENABLE    (SCTLR_M | SCTLR_C | SCTLR_I)
 
 void early_mmu_init();
-void *early_mmu_ioremap(uint64_t phys, uint64_t size);
+
+/* Runtime MMIO mapping (available only after paging_init()). */
+void *mmu_ioremap(uint64_t phys, uint64_t size);
+
+void mmu_sync(void);
+void mmu_map_blocks(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr);
+void mmu_disable_ttbr0(void);
+
+/* Called by paging_init() once the buddy allocator is ready. */
+void mmu_set_paging_ready(void);
 
 #endif /* __ARCH_MMU_H__ */

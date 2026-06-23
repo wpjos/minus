@@ -33,10 +33,10 @@ static int uart_probe(struct platform_device *pdev)
 	if (!res)
 		return -1;
 
-	if (!early_mmu_ioremap(res->start, resource_size(res)))
+	g_uart_base = (uint64_t)mmu_ioremap(res->start, resource_size(res));
+	if (!g_uart_base)
 		return -1;
 
-	g_uart_base = res->start;
 	UART_CR(g_uart_base) = 0x301;	/* enable TX/RX */
 	return 0;
 }
