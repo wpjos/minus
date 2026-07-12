@@ -63,8 +63,94 @@ int of_device_is_compatible(const void *fdt, int nodeoffset,
 }
 
 /*
+ * Read an address/size made up of @cells 32-bit cells.
+ */
+static uint64_t of_read_cells(const fdt32_t *prop, int cells)
+{
+	uint64_t val = 0;
+	int i;
+
+	for (i = 0; i < cells; i++)
+		val = (val << 32) | fdt32_to_cpu(prop[i]);
+	return val;
+}
+
+/*
+ * Translate a device-tree bus address up to the CPU physical address space
+ * by walking the parent chain and applying each bus node's "ranges".
+ * Returns 0 on success, -1 on failure.
+ */
+static int of_translate_address(const void *fdt, int nodeoffset,
+				uint64_t addr, uint64_t *out)
+{
+	while (1) {
+		int parent = fdt_parent_offset(fdt, nodeoffset);
+		int grandparent;
+
+		if (parent < 0)
+			return -1;
+
+		grandparent = fdt_parent_offset(fdt, parent);
+		if (grandparent < 0) {
+			/* parent is the root: address is already CPU physical */
+			*out = addr;
+			return 0;
+		}
+
+		{
+			int ac = fdt_address_cells(fdt, parent);
+			int sc = fdt_size_cells(fdt, parent);
+			int pac = fdt_address_cells(fdt, grandparent);
+			const fdt32_t *ranges;
+			int len;
+			int entry_cells;
+			int n, i;
+			int matched = 0;
+
+			if (ac < 0 || sc < 0 || pac < 0)
+				return -1;
+
+			ranges = fdt_getprop(fdt, parent, "ranges", &len);
+			if (!ranges)
+				return -1;
+
+			if (len == 0) {
+				/* empty "ranges;" means 1:1, continue upward */
+				nodeoffset = parent;
+				continue;
+			}
+
+			entry_cells = ac + pac + sc;
+			if (len < entry_cells * (int)sizeof(fdt32_t))
+				return -1;
+
+			n = len / (entry_cells * sizeof(fdt32_t));
+			for (i = 0; i < n; i++) {
+				const fdt32_t *e = ranges + i * entry_cells;
+				uint64_t child_base = of_read_cells(e, ac);
+				uint64_t parent_base = of_read_cells(e + ac, pac);
+				uint64_t size = of_read_cells(e + ac + pac, sc);
+
+				if (addr >= child_base &&
+				    addr < child_base + size) {
+					addr = parent_base + (addr - child_base);
+					matched = 1;
+					break;
+				}
+			}
+
+			if (!matched)
+				return -1;
+		}
+
+		nodeoffset = parent;
+	}
+}
+
+/*
  * Get the index-th memory resource from a reg property.
- * Uses parent node for #address-cells and #size-cells.
+ * Uses parent node for #address-cells and #size-cells and translates
+ * the address through any parent "ranges" properties.
  */
 int of_get_address_resource(const void *fdt, int nodeoffset, int parent,
 			    int index, struct resource *res)
@@ -89,19 +175,11 @@ int of_get_address_resource(const void *fdt, int nodeoffset, int parent,
 
 	offset = index * entry_cells;
 
-	addr = 0;
-	if (ac >= 2)
-		addr = ((uint64_t)fdt32_to_cpu(prop[offset]) << 32) |
-			fdt32_to_cpu(prop[offset + 1]);
-	else
-		addr = fdt32_to_cpu(prop[offset]);
+	addr = of_read_cells(prop + offset, ac);
+	size = of_read_cells(prop + offset + ac, sc);
 
-	size = 0;
-	if (sc >= 2)
-		size = ((uint64_t)fdt32_to_cpu(prop[offset + ac]) << 32) |
-			fdt32_to_cpu(prop[offset + ac + 1]);
-	else
-		size = fdt32_to_cpu(prop[offset + ac]);
+	if (of_translate_address(fdt, nodeoffset, addr, &addr) < 0)
+		return -1;
 
 	res->start = addr;
 	res->end = addr + size - 1;

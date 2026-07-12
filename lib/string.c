@@ -172,6 +172,7 @@ int vsprintf(char *str, const char *format, va_list args)
 
 	while (p && *p != '\0') {
 		if (*p != '%') {
+			if (*p == '\n') *str++ = '\r';
 			*str++ = *p++;
 			continue;
 		}
