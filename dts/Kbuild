@@ -1,0 +1,3 @@
+obj-y += bcm2712-rpi-5-b.o
+
+include $(TOPDIR)/scripts/Kbuild.include

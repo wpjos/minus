@@ -3,13 +3,17 @@
 MAKEFLAGS += -s
 MINUS_VERSION := 0.1
 MINUS_ARCH    := aarch64
-MINUS_PLAT    := qemu-virt
+MINUS_PLAT    := raspi5
 
 # Platform-specific physical load address.
 # Different machines may load the kernel image at different physical addresses;
 # keep this in the build system rather than hardcoding it in headers.
 ifeq ($(MINUS_PLAT),qemu-virt)
 MINUS_PHYS_LOAD_OFFSET := 0x40080000
+endif
+
+ifeq ($(MINUS_PLAT),raspi5)
+MINUS_PHYS_LOAD_OFFSET := 0x80000
 endif
 
 # 交叉编译器配置（Linux 内核风格）
@@ -36,7 +40,7 @@ KBUILD_CPPFLAGS := -I $(TOPDIR)/include/base \
 
 # 编译标志（AArch64 裸机必备）
 KBUILD_CFLAGS := $(KBUILD_CPPFLAGS) \
-		 -D__MINUS__ \
+                 -D__MINUS__ \
                  -march=armv8-a \
                  -mgeneral-regs-only \
                  -ffreestanding \
@@ -67,7 +71,7 @@ $(TARGET):
 	$(MAKE) -f Kbuild \
 	        CC=$(CC) \
 	        LD=$(LD) \
-		OBJCOPY=${OBJCOPY} \
+	        OBJCOPY=${OBJCOPY} \
 	        CFLAGS="$(KBUILD_CFLAGS)" \
 	        CPPFLAGS="$(KBUILD_CPPFLAGS)" \
 	        LDFLAGS="$(KBUILD_LDFLAGS)" \
