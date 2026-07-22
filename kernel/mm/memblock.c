@@ -3,6 +3,8 @@
 #include "fdt.h"
 #include "printk.h"
 #include "stdbool.h"
+#include "buddy.h"
+#include "mmu.h"
 
 #define EARLY_MM_ALIGN		8UL
 #define MEMBLOCK_MAX_MEMORY	16
@@ -123,7 +125,7 @@ static void memblock_carve_reserved(void)
 /*
  * FDT helpers: parse memory nodes from device tree
  */
-static void early_mm_fdt_register_one(const fdt32_t *reg, uint64_t len,
+static void memblock_fdt_register_one(const fdt32_t *reg, uint64_t len,
 				      int address_cells, int size_cells)
 {
 	uint64_t i = 0, j;
@@ -140,7 +142,7 @@ static void early_mm_fdt_register_one(const fdt32_t *reg, uint64_t len,
 	}
 }
 
-static void early_mm_fdt_register_all(void)
+static void memblock_fdt_register_all(void)
 {
 	void *fdt = fdt_base();
 	int root = fdt_path_offset(fdt, "/");
@@ -155,11 +157,22 @@ static void early_mm_fdt_register_all(void)
 		const fdt32_t *reg = fdt_getprop(fdt, node, "reg", &prop_len);
 		if (!reg)
 			continue;
-		early_mm_fdt_register_one(reg, prop_len, address_cells, size_cells);
+		memblock_fdt_register_one(reg, prop_len, address_cells, size_cells);
 	}
 }
 
-void early_mm_init(void)
+static void memblock_stat(void)
+{
+	int total_size = 0;
+	for (int i = 0; i < memblock.memory_cnt; i++) {
+		total_size += memblock.memory[i].size;
+	}
+
+	printk("early_mm: %d MB available\n", total_size / (1024 * 1024));
+}
+
+
+void memblock_init(void)
 {
 	extern char __image_start[], __image_end[];
 	struct memblock_region reserves[] = {
@@ -169,26 +182,15 @@ void early_mm_init(void)
 	for (int i = 0; i < nr; i++) {
 		early_mm_reserve(reserves[i].base, reserves[i].size);
 	}
-	early_mm_fdt_register_all();
+	memblock_fdt_register_all();
 	memblock_carve_reserved();
 	memblock.initialized = true;
-	early_mm_stat();
-}
-
-void early_mm_stat(void)
-{
-	int total_size = 0;
-	for (int i = 0; i < memblock.memory_cnt; i++) {
-		total_size += memblock.memory[i].size;
-		printk("i = %d addr = %p size = %p\n", i, memblock.memory[i].base, memblock.memory[i].size);
-	}
-
-	printk("early_mm: %d MB available\n", total_size / (1024 * 1024));
+	memblock_stat();
 }
 
 /*
  * Reserve a physical memory region so it will not be allocated.
- * May be called before early_mm_init() (recorded in memblock.reserved[])
+ * May be called before memblock_init() (recorded in memblock.reserved[])
  * or after (carved directly out of memory[]).
  */
 void early_mm_reserve(uint64_t base, uint64_t size)
@@ -212,7 +214,7 @@ void early_mm_reserve(uint64_t base, uint64_t size)
  * Allocate a block of the given size aligned to @align.
  * Simple bump allocator over the memory[] regions.
  */
-void *early_mm_alloc_aligned(uint64_t size, uint64_t align)
+void *memblock_alloc_aligned(uint64_t size, uint64_t align)
 {
 	int i;
 	uint64_t alloc_size;
@@ -227,6 +229,10 @@ void *early_mm_alloc_aligned(uint64_t size, uint64_t align)
 		uint64_t base = ALIGN_UP(m->base, align);
 		uint64_t end = m->base + m->size;
 
+		/* Avoid returning a NULL pointer for RAM that starts at PA 0. */
+		if (base == 0)
+			base = align;
+
 		if (base + alloc_size > end)
 			continue;
 
@@ -239,30 +245,35 @@ void *early_mm_alloc_aligned(uint64_t size, uint64_t align)
 	return NULL;
 }
 
-uint64_t early_mm_memory_start(void)
+void memblock_free_to_buddy(void)
+{
+	int cnt = memblock.memory_cnt;
+	struct memblock_region *m;
+
+	for (int i = 0; i < cnt; i++) {
+		m = &memblock.memory[i];
+		buddy_free_pages_range(m->base, m->size);
+	}
+}
+
+void memblock_map_all(uint64_t *pgd)
+{
+	int cnt = memblock.memory_cnt;
+	struct memblock_region *m;
+
+	for (int i = 0; i < cnt; i++) {
+		m = &memblock.memory[i];
+		early_mmu_map(pgd, __PA_VA__(m->base), m->base, m->size,
+			      MMU_REGION_NORMAL);
+	}
+}
+
+uint64_t memblock_mem_start(void)
 {
 	return memory_start;
 }
 
-uint64_t early_mm_memory_end(void)
+uint64_t memblock_mem_end(void)
 {
 	return memory_end;
-}
-
-int early_mm_memory_region_count(void)
-{
-	return memblock.memory_cnt;
-}
-
-void early_mm_memory_region(int idx, uint64_t *base, uint64_t *size)
-{
-	if (idx < 0 || idx >= memblock.memory_cnt) {
-		return;
-	}
-	if (base) {
-		*base = memblock.memory[idx].base;
-	}
-	if (size) {
-		*size = memblock.memory[idx].size;
-	}
 }

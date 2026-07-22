@@ -3,6 +3,7 @@
 #include "module.h"
 #include "types.h"
 #include "mmu.h"
+#include "printk.h"
 
 /* PL011 UART register offsets */
 #define UART_DR(base)	(*(volatile uint32_t *)((base) + 0x00))
@@ -10,7 +11,7 @@
 #define UART_CR(base)	(*(volatile uint32_t *)((base) + 0x30))
 
 /* Cached base address, set during probe */
-static uint64_t g_uart_base;
+static uint64_t g_uart_base = 0;
 
 void uart_putc(char c)
 {
@@ -30,8 +31,10 @@ void uart_puts(const char *str)
 static int uart_probe(struct platform_device *pdev)
 {
 	struct resource *res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res)
+	if (!res) {
+		printk("uart prob fail\n");
 		return -1;
+	}
 
 	g_uart_base = (uint64_t)mmu_ioremap(res->start, resource_size(res));
 	if (!g_uart_base)

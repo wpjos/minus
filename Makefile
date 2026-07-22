@@ -3,7 +3,7 @@
 MAKEFLAGS += -s
 MINUS_VERSION := 0.1
 MINUS_ARCH    := aarch64
-MINUS_PLAT    := raspi5
+MINUS_PLAT    := qemu-virt
 
 # Platform-specific physical load address.
 # Different machines may load the kernel image at different physical addresses;

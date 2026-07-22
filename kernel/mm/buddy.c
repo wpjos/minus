@@ -68,6 +68,49 @@ static void buddy_add_page(size_t pfn, size_t order)
 	buddy_add_to_list(page, order);
 }
 
+static size_t pfn_order_align(size_t pfn)
+{
+	size_t order = 0;
+
+	while (((pfn >> order) & 1) == 0 && order < BUDDY_MAX_ORDER - 1)
+		order++;
+	return order;
+}
+
+static size_t order_max_pages(size_t nr_pages)
+{
+	size_t order = BUDDY_MAX_ORDER - 1;
+
+	while ((1UL << order) > nr_pages)
+		order--;
+	return order;
+}
+
+void buddy_free_pages_range(uint64_t base, uint64_t size)
+{
+	uint64_t start = ALIGN_UP(base, PAGE_SIZE);
+	uint64_t end = ALIGN_DOWN(base + size, PAGE_SIZE);
+	size_t pfn, nr_pages;
+
+	if (end <= start)
+		return;
+
+	pfn = start >> PAGE_SHIFT;
+	nr_pages = (end - start) >> PAGE_SHIFT;
+
+	while (nr_pages) {
+		size_t order = pfn_order_align(pfn);
+		size_t max_order = order_max_pages(nr_pages);
+
+		if (order > max_order)
+			order = max_order;
+
+		buddy_add_page(pfn, order);
+		pfn += 1UL << order;
+		nr_pages -= 1UL << order;
+	}
+}
+
 static void buddy_split(struct page *page, size_t l_order, size_t h_order)
 {
 	while (h_order > l_order) {

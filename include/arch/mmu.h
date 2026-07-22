@@ -43,13 +43,16 @@
 /*
  * Stage-1 descriptor construction.
  * The physical address must already be aligned to the appropriate block/page
- * size (table: 4 KB, block at L2: 2 MB, page at L3: 4 KB).
+ * size (table: 4 KB, block at L1: 1 GB, block at L2: 2 MB, page at L3: 4 KB).
  */
 #define PTE_TABLE(pa) \
     (((uint64_t)(pa) & PTE_PHYS_MASK) | PTE_TYPE_TABLE)
 
 #define PTE_BLOCK(pa, attr) \
-    (((uint64_t)(pa) & 0xFFFFE00000ULL) | PTE_TYPE_BLOCK | (attr) | PTE_AF)
+    (((uint64_t)(pa) & PTE_PHYS_MASK) | PTE_TYPE_BLOCK | (attr) | PTE_AF)
+
+#define PTE_PAGE(pa, attr) \
+    (((uint64_t)(pa) & PTE_PHYS_MASK) | PTE_TYPE_PAGE | (attr) | PTE_AF)
 
 /* Number of entries per 4 KB translation table */
 #define PTE_ENTRIES         512
@@ -60,27 +63,24 @@
 #define PMD_SHIFT           21      /* Level 2: 2 MB */
 #define PTE_SHIFT           12      /* Level 3: 4 KB */
 
-/*
- * Early 48-bit page-table allocation.
- *   1 PGD (level 0, 512 x 512 GB)
- *   EARLY_PUD_PAGES PUDs (level 1, 512 x 1 GB)
- *   EARLY_PMD_PAGES PMDs (level 2, 512 x 2 MB)
- *
- * The default sizes are enough for the kernel image mapped both at its
- * physical load address and at its linked high virtual address, plus the
- * UART and a few runtime MMIO regions.
- */
-#ifndef EARLY_PUD_PAGES
-#define EARLY_PUD_PAGES     4
-#endif
-#ifndef EARLY_PMD_PAGES
-#define EARLY_PMD_PAGES     8
-#endif
-#define EARLY_PGD_PAGES     1
-#define EARLY_PGTABLE_PAGES (EARLY_PGD_PAGES + EARLY_PUD_PAGES + EARLY_PMD_PAGES)
-#define EARLY_PGTABLE_SIZE  (EARLY_PGTABLE_PAGES * 4096)
+#define PGD_LEVEL           0
+#define PUD_LEVEL           1
+#define PMD_LEVEL           2
+#define PTE_LEVEL           3
 
-/* Region attributes passed to early_mmu_map_blocks() */
+/*
+ * 48-bit page-table allocation.
+ *
+ * The linker reserves three level-0 tables:
+ *   __early_init_pgd  - high-VA kernel mappings built before the MMU is on
+ *   __early_idmap_pgd - identity mappings used during the MMU-enable moment
+ *   __init_pgd        - runtime kernel page table, populated by paging_init()
+ *
+ * PUD/PMD/PTE pages are allocated on demand.  The allocator depends on the
+ * boot phase: the early bump allocator while the MMU is off or during
+ * paging_init(), and kmalloc once the buddy/slab allocators are ready.
+ */
+
 #define MMU_REGION_NORMAL   (PTE_ATTR_NORMAL | PTE_SH_INNER | PTE_AP_RW_EL1)
 #define MMU_REGION_DEVICE   (PTE_ATTR_DEVICE | PTE_AP_RW_EL1 | PTE_PXN | PTE_UXN)
 #define MMU_REGION_NORMAL_RO    (PTE_ATTR_NORMAL | PTE_SH_INNER | PTE_AP_RO_EL1)
@@ -113,14 +113,14 @@
 #define TCR_TG1_SHIFT       30
 #define TCR_TG1_4KB         (2ULL << TCR_TG1_SHIFT)      /* 10 = 4 KB */
 #define TCR_IPS_SHIFT       32
-#define TCR_IPS_48BIT       (5ULL << TCR_IPS_SHIFT)      /* 101 = 48-bit PA */
+#define TCR_IPS_40BIT       (2ULL << TCR_IPS_SHIFT)      /* 10 = 40-bit PA */
 
 #define MMU_TCR_VAL         (TCR_T0SZ_48BIT | TCR_EPD0 | \
                              TCR_IRGN0_WBWA | TCR_ORGN0_WBWA | TCR_SH0_INNER | \
                              TCR_TG0_4KB | \
                              TCR_T1SZ_48BIT | TCR_A1 | \
                              TCR_IRGN1_WBWA | TCR_ORGN1_WBWA | TCR_SH1_INNER | \
-                             TCR_TG1_4KB | TCR_IPS_48BIT)
+                             TCR_TG1_4KB | TCR_IPS_40BIT)
 
 /* MAIR_EL1: Attr0 = Normal WBWA, Attr1 = Device-nGnRnE */
 #define MAIR_ATTR0_NORMAL   0xFFULL
@@ -133,16 +133,21 @@
 #define SCTLR_I             (1ULL << 12)
 #define MMU_SCTLR_ENABLE    (SCTLR_M | SCTLR_C | SCTLR_I)
 
-void early_mmu_init();
+#define MMU_BUGON(cond)	do { if (cond) { while (1); } } while (0)
 
-/* Runtime MMIO mapping (available only after paging_init()). */
+static inline bool mmu_entry_populated(uint64_t entry)
+{
+	return ((entry & PTE_TYPE_MASK) != PTE_TYPE_INVALID);
+}
+
+void early_mmu_init(void);
+void early_mmu_map(uint64_t *table, uint64_t va, uint64_t pa,
+		   uint64_t size, uint64_t attr);
+
 void *mmu_ioremap(uint64_t phys, uint64_t size);
-
 void mmu_sync(void);
-void mmu_map_blocks(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr);
+void mmu_map(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr);
 void mmu_disable_ttbr0(void);
-
-/* Called by paging_init() once the buddy allocator is ready. */
-void mmu_set_paging_ready(void);
+void mmu_switch_pgd(uint64_t pgd);
 
 #endif /* __ARCH_MMU_H__ */

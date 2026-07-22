@@ -24,6 +24,24 @@
 #define TEXT_OFFSET		0x080000
 #define VIRT_LOAD_OFFSET	(VIRT_LOAD_BASE + TEXT_OFFSET)
 
+#define VIRT_HIGH_ADDR		(VA_MAX - (ULL(1) << 30) + ULL(1))
+
+/* FIXMAP_ADDR must 2M align */
+#define FIXMAP_ADDR		(VIRT_HIGH_ADDR)
+#define FIXMAP_SIZE		(ULL(1) << 16)
+#define FIXMAP_PGTBL		(FIXMAP_ADDR)
+#define FIXMAP_PUD		(FIXMAP_ADDR + PAGE_SIZE * 1)
+#define FIXMAP_PMD		(FIXMAP_ADDR + PAGE_SIZE * 2)
+#define FIXMAP_PTE		(FIXMAP_ADDR + PAGE_SIZE * 3)
+
+/*
+ * Physical-memory pool reserved after the kernel image for page-table pages
+ * allocated before the buddy allocator is ready.  Must be large enough for the
+ * initial identity/high-VA maps and for the temporary mappings created during
+ * paging_init().
+ */
+#define EARLY_MMU_POOL_SIZE	(ULL(1) << 16)	/* 64k */
+
 #ifndef PHYS_LOAD_OFFSET
 #error "PHYS_LOAD_OFFSET must be defined by the build system"
 #endif

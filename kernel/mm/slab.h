@@ -10,9 +10,6 @@ void kmem_cache_destroy(struct kmem_cache *cachep);
 void *kmem_cache_alloc(struct kmem_cache *cachep);
 void kmem_cache_free(struct kmem_cache *cachep, void *objp);
 
-void *kmalloc(size_t size);
-void kfree(void *objp);
-
 void slab_init(void);
 
 #endif

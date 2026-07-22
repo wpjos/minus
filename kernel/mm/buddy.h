@@ -14,6 +14,7 @@ struct free_area {
 void buddy_init(void);
 struct page *buddy_alloc_pages(size_t size);
 void buddy_free_pages(struct page *page);
+void buddy_free_pages_range(uint64_t base, uint64_t size);
 void buddy_stat(void);
 
 #endif
