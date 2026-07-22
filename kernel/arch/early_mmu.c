@@ -18,7 +18,7 @@ extern uint64_t __attribute__((visibility("hidden"))) g_level_shift[];
 #define FIXMAP_SLOT_PMD		2
 #define FIXMAP_SLOT_PTE		3
 
-static int g_early_mmu_on = false;
+static bool g_early_mmu_on = false;
 
 /*
  * Simple bump allocator used while building the initial page tables with the
@@ -187,17 +187,20 @@ void early_mmu_map(uint64_t *table, uint64_t va, uint64_t pa,
 
 void early_mmu_init(void)
 {
+	extern char __attribute__((visibility("hidden"))) __bss_start[], __bss_end[];
 	extern char __attribute__((visibility("hidden"))) __image_start[], __image_end[];
 	uint64_t image_start_pa = (uint64_t)__image_start;
 	uint64_t image_start_va = __PA_VA__(image_start_pa);
 	uint64_t image_size = (uint64_t)(__image_end - __image_start);
+	uint64_t bss_size = (uint64_t)(__bss_end - __bss_start);
 	uint64_t fixmap_pte_page;
 	uint64_t sctlr;
 
-	early_mmu_reserve_ator();
-
+	memset(__bss_start, 0, bss_size);
 	memset(__early_init_pgd, 0, PAGE_SIZE);
 	memset(__early_idmap_pgd, 0, PAGE_SIZE);
+
+	early_mmu_reserve_ator();
 
 	/*
 	 * Identity-map the kernel physical load region so execution survives
