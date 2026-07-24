@@ -174,9 +174,9 @@ static void memblock_stat(void)
 
 void memblock_init(void)
 {
-	extern char __image_start[], __image_end[];
+	extern char __image_end[];
 	struct memblock_region reserves[] = {
-		{__VA_PA__(__image_start), (uint64_t)(__image_end - __image_start)},
+		{0, __VA_PA__(__image_end)},
 	};
 	int nr = sizeof(reserves) / sizeof(struct memblock_region);
 	for (int i = 0; i < nr; i++) {

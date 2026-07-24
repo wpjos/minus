@@ -148,6 +148,22 @@ static uint64_t *early_mmu_get_ntable(uint64_t *table, uint64_t idx,
 	return (uint64_t *)vaddr;
 }
 
+static inline uint64_t early_mmu_atsel(uint64_t va) {
+	uint64_t par;
+	__asm__ volatile (
+		"at  s1e1r, %1\n\t"
+		"dsb sy\n\t"
+		"mrs %0, par_el1"
+		: "=r" (par)
+		: "r" (va)
+		: "memory"
+	);
+	if (par & 0x1) {
+		return 0;
+	}
+	return (par & 0xFFFFFFFFF000ULL) | (va & 0xFFF);
+}
+
 static void early_mmu_map_range(uint64_t *table, uint64_t vstart,
 				uint64_t vend, uint64_t pa,
 				uint32_t level, uint64_t attr)
@@ -208,9 +224,6 @@ void early_mmu_init(void)
 	 */
 	early_mmu_map(__early_idmap_pgd, image_start_pa, image_start_pa,
 		      image_size, MMU_REGION_NORMAL);
-
-	early_mmu_map(__early_idmap_pgd, 0x9000000, 0x9000000,
-		      1 << 12, MMU_REGION_NORMAL);
 	/*
 	 * Map the kernel at its linked high virtual address.
 	 * This is the mapping the kernel uses once it jumps to VA space.

@@ -104,7 +104,10 @@ void *mmu_ioremap(uint64_t pa, uint64_t size)
 void mmu_switch_pgd(uint64_t pgd)
 {
 	sys_reg_write(TTBR1_EL1, pgd);
-	mmu_sync();
+	__asm__ volatile("isb" ::: "memory");
+	__asm__ volatile("tlbi vmalle1" ::: "memory");
+	__asm__ volatile("dsb ish" ::: "memory");
+	__asm__ volatile("isb" ::: "memory");
 }
 
 void mmu_disable_ttbr0(void)
