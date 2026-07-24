@@ -5,6 +5,7 @@
 #include "memory.h"
 #include "mm.h"
 #include "page.h"
+#include "cache.h"
 
 extern uint64_t __attribute__((visibility("hidden"))) __early_init_pgd[PTE_ENTRIES];
 extern uint64_t __attribute__((visibility("hidden"))) __early_idmap_pgd[PTE_ENTRIES];
@@ -84,7 +85,6 @@ static void early_mmu_set_fixmap(uint64_t va, uint64_t pa, uint64_t attr)
 {
 	uint64_t *pte = early_mmu_get_pte(va);
 	*pte = PTE_PAGE(pa, attr);
-	mmu_sync();
 }
 
 static uint64_t early_mmu_fixmap_va(int slot)
@@ -102,17 +102,28 @@ static uint64_t *early_mmu_fixmap_pte(int slot)
 	return &pte_page[slot];
 }
 
+static inline void early_mmu_populate(uint64_t *entry, uint64_t val)
+{
+	*entry = val;
+	if (g_early_mmu_on) {
+		dsb_ish();
+	}
+}
+
 static uint64_t early_mmu_fixmap_set(uint64_t pa, uint32_t level)
 {
 	uint32_t slot = FIXMAP_SLOT_PGTBL + level;
+	uint64_t va = early_mmu_fixmap_va(slot);
 	uint64_t *pte = early_mmu_fixmap_pte(slot);
 	uint64_t val = PTE_PAGE(pa, MMU_REGION_NORMAL);
 
+	dsb_ish();
+	tlbi_va(va);
+	dsb_ish();
 	*pte = val;
-	__asm__ volatile("dc cvac, %0" : : "r"(pte) : "memory");
-	__asm__ volatile("dsb sy" ::: "memory");
-	mmu_sync();
-	return early_mmu_fixmap_va(slot);
+	dsb_ish();
+
+	return va;
 }
 
 /*
@@ -130,7 +141,7 @@ static uint64_t *early_mmu_get_ntable(uint64_t *table, uint64_t idx,
 
 	if (!mmu_entry_populated(table[idx])) {
 		phys = early_mmu_alloc_page();
-		table[idx] = PTE_TABLE(phys);
+		early_mmu_populate(&table[idx], PTE_TABLE(phys));
 		allocated = true;
 	} else {
 		phys = table[idx] & PTE_PHYS_MASK;
@@ -146,6 +157,22 @@ static uint64_t *early_mmu_get_ntable(uint64_t *table, uint64_t idx,
 	}
 
 	return (uint64_t *)vaddr;
+}
+
+static inline uint64_t early_mmu_at(uint64_t va) {
+	uint64_t par;
+	__asm__ volatile (
+		"at  s1e1r, %1\n\t"
+		"dsb sy\n\t"
+		"mrs %0, par_el1"
+		: "=r" (par)
+		: "r" (va)
+		: "memory"
+	);
+	if (par & 0x1) {
+		return 0;
+	}
+	return (par & 0xFFFFFFFFF000ULL) | (va & 0xFFF);
 }
 
 static void early_mmu_map_range(uint64_t *table, uint64_t vstart,
@@ -166,9 +193,9 @@ static void early_mmu_map_range(uint64_t *table, uint64_t vstart,
 
 		if (level == PTE_LEVEL) {
 			MMU_BUGON(chunk != size);
-			table[idx] = PTE_PAGE(pa, attr);
+			early_mmu_populate(&table[idx], PTE_PAGE(pa, attr));
 		} else if (chunk == size && (va & (size - 1)) == 0 && (pa & (size - 1)) == 0) {
-			table[idx] = PTE_BLOCK(pa, attr);
+			early_mmu_populate(&table[idx], PTE_BLOCK(pa, attr));
 		} else {
 			uint64_t *ntable = early_mmu_get_ntable(table, idx, level + 1);
 			early_mmu_map_range(ntable, va, va + chunk, pa,
@@ -208,9 +235,6 @@ void early_mmu_init(void)
 	 */
 	early_mmu_map(__early_idmap_pgd, image_start_pa, image_start_pa,
 		      image_size, MMU_REGION_NORMAL);
-
-	early_mmu_map(__early_idmap_pgd, 0x9000000, 0x9000000,
-		      1 << 12, MMU_REGION_NORMAL);
 	/*
 	 * Map the kernel at its linked high virtual address.
 	 * This is the mapping the kernel uses once it jumps to VA space.
@@ -231,29 +255,20 @@ void early_mmu_init(void)
 	early_mmu_set_fixmap(FIXMAP_PGTBL, fixmap_pte_page,
 			     MMU_REGION_NORMAL);
 
-	/*
-	 * Ensure all page table writes are visible and any stale TLB entries are
-	 * flushed before configuring the MMU.
-	 */
-	mmu_sync();
+	dsb_ish();
 
 	/* Configure translation regime for 48-bit VA */
 	sys_reg_write(MAIR_EL1, MMU_MAIR_VAL);
 	sys_reg_write(TCR_EL1, MMU_TCR_VAL);
 	sys_reg_write(TTBR0_EL1, (uint64_t)__early_idmap_pgd);
 	sys_reg_write(TTBR1_EL1, (uint64_t)__early_init_pgd);
-	__asm__ volatile("isb" ::: "memory");
 
 	/* Enable MMU, D-cache and I-cache */
 	sctlr = sys_reg_read(SCTLR_EL1);
 	sctlr |= MMU_SCTLR_ENABLE;
 	sys_reg_write(SCTLR_EL1, sctlr);
-	__asm__ volatile("isb" ::: "memory");
 
-	/* Invalidate the entire instruction cache for the new regime */
-	__asm__ volatile("ic iallu" ::: "memory");
-	__asm__ volatile("dsb sy" ::: "memory");
-	__asm__ volatile("isb" ::: "memory");
+	isb();
 
 	g_early_mmu_on = true;
 }

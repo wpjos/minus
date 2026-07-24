@@ -18,9 +18,12 @@
  * No free list, no coalescing, no sorting.  Early allocations are expected
  * to live until the buddy/page allocator takes over.
  */
+#define MEMBLOCK_KERNEL		0x01	/* kernel image, already mapped */
+
 struct memblock_region {
 	uint64_t base;
 	uint64_t size;
+	uint32_t flags;
 };
 
 struct memblock {
@@ -28,7 +31,6 @@ struct memblock {
 	int memory_cnt;
 	struct memblock_region reserved[MEMBLOCK_MAX_RESERVED];
 	int reserved_cnt;
-	bool initialized;
 };
 
 static struct memblock memblock;
@@ -41,6 +43,7 @@ static void memblock_add_memory(uint64_t base, uint64_t size)
 		return;
 	memblock.memory[memblock.memory_cnt].base = base;
 	memblock.memory[memblock.memory_cnt].size = size;
+	memblock.memory[memblock.memory_cnt].flags = 0;
 	memblock.memory_cnt++;
 
 	if (base < memory_start) {
@@ -51,12 +54,13 @@ static void memblock_add_memory(uint64_t base, uint64_t size)
 	}
 }
 
-static void memblock_add_reserved(uint64_t base, uint64_t size)
+static void memblock_add_reserved(uint64_t base, uint64_t size, uint32_t flags)
 {
 	if (memblock.reserved_cnt >= MEMBLOCK_MAX_RESERVED || size == 0)
 		return;
 	memblock.reserved[memblock.reserved_cnt].base = base;
 	memblock.reserved[memblock.reserved_cnt].size = size;
+	memblock.reserved[memblock.reserved_cnt].flags = flags;
 	memblock.reserved_cnt++;
 }
 
@@ -174,40 +178,18 @@ static void memblock_stat(void)
 
 void memblock_init(void)
 {
-	extern char __image_start[], __image_end[];
+	extern char __image_end[];
 	struct memblock_region reserves[] = {
-		{__VA_PA__(__image_start), (uint64_t)(__image_end - __image_start)},
+		{0, __VA_PA__(__image_end), MEMBLOCK_KERNEL},
 	};
 	int nr = sizeof(reserves) / sizeof(struct memblock_region);
 	for (int i = 0; i < nr; i++) {
-		early_mm_reserve(reserves[i].base, reserves[i].size);
+		memblock_add_reserved(reserves[i].base, reserves[i].size,
+				      reserves[i].flags);
 	}
 	memblock_fdt_register_all();
 	memblock_carve_reserved();
-	memblock.initialized = true;
 	memblock_stat();
-}
-
-/*
- * Reserve a physical memory region so it will not be allocated.
- * May be called before memblock_init() (recorded in memblock.reserved[])
- * or after (carved directly out of memory[]).
- */
-void early_mm_reserve(uint64_t base, uint64_t size)
-{
-	uint64_t rbase = ALIGN_UP(base, EARLY_MM_ALIGN);
-	uint64_t rend = ALIGN_DOWN(base + size, EARLY_MM_ALIGN);
-	uint64_t rsize;
-
-	if (rend <= rbase)
-		return;
-
-	rsize = rend - rbase;
-
-	if (!memblock.initialized)
-		memblock_add_reserved(rbase, rsize);
-	else
-		memblock_carve(rbase, rend);
 }
 
 /*
@@ -236,6 +218,7 @@ void *memblock_alloc_aligned(uint64_t size, uint64_t align)
 		if (base + alloc_size > end)
 			continue;
 
+		memblock_add_reserved(base, alloc_size, 0);
 		/* Bump: shrink the region from the front */
 		m->base = base + alloc_size;
 		m->size = end - m->base;
@@ -258,11 +241,17 @@ void memblock_free_to_buddy(void)
 
 void memblock_map_all(uint64_t *pgd)
 {
-	int cnt = memblock.memory_cnt;
 	struct memblock_region *m;
 
-	for (int i = 0; i < cnt; i++) {
+	for (int i = 0; i < memblock.memory_cnt; i++) {
 		m = &memblock.memory[i];
+		early_mmu_map(pgd, __PA_VA__(m->base), m->base, m->size,
+			      MMU_REGION_NORMAL);
+	}
+	for (int i = 0; i < memblock.reserved_cnt; i++) {
+		m = &memblock.reserved[i];
+		if (m->flags & MEMBLOCK_KERNEL)
+			continue;
 		early_mmu_map(pgd, __PA_VA__(m->base), m->base, m->size,
 			      MMU_REGION_NORMAL);
 	}

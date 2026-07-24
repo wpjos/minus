@@ -6,8 +6,10 @@
 #include "mm.h"
 #include "page.h"
 #include "buddy.h"
+#include "printk.h"
+#include "cache.h"
 
-extern uint64_t __attribute__((visibility("hidden"))) __init_pgd[PTE_ENTRIES];
+extern uint64_t __init_pgd[PTE_ENTRIES];
 
 const uint64_t g_level_size[] = {
 	1ULL << PGD_SHIFT,
@@ -22,6 +24,12 @@ const uint64_t g_level_shift[] = {
 	PTE_SHIFT,
 };
 
+static inline void mmu_populate(uint64_t *entry, uint64_t val)
+{
+	*entry = val;
+	dsb_ish();
+}
+
 static uint64_t *mmu_get_ntable(uint64_t *table, uint64_t idx)
 {
 	uint64_t phys;
@@ -34,7 +42,7 @@ static uint64_t *mmu_get_ntable(uint64_t *table, uint64_t idx)
 		vaddr = page_to_virt(page);
 		memset(vaddr, 0, PAGE_SIZE);
 		phys = __VA_PA__((uint64_t)vaddr);
-		table[idx] = PTE_TABLE(phys);
+		mmu_populate(&table[idx], PTE_TABLE(phys));
 		return vaddr;
 	}
 
@@ -60,9 +68,9 @@ static void mmu_map_range(uint64_t *table, uint64_t vstart,
 
 		if (level == PTE_LEVEL) {
 			MMU_BUGON(chunk != size);
-			table[idx] = PTE_PAGE(pa, attr);
+			mmu_populate(&table[idx], PTE_PAGE(pa, attr));
 		} else if (chunk == size && (va & (size - 1)) == 0 && (pa & (size - 1)) == 0) {
-			table[idx] = PTE_BLOCK(pa, attr);
+			mmu_populate(&table[idx], PTE_BLOCK(pa, attr));
 		} else {
 			uint64_t *ntable = mmu_get_ntable(table, idx);
 			mmu_map_range(ntable, va, va + chunk, pa,
@@ -73,18 +81,15 @@ static void mmu_map_range(uint64_t *table, uint64_t vstart,
 	}
 }
 
-void mmu_sync(void)
-{
-	__asm__ volatile("dsb sy" ::: "memory");
-	__asm__ volatile("tlbi vmalle1" ::: "memory");
-	__asm__ volatile("dsb sy" ::: "memory");
-	__asm__ volatile("isb" ::: "memory");
-}
-
 void mmu_map(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr)
 {
-	mmu_map_range(__init_pgd, va, va + size, pa, PGD_LEVEL, attr);
-	mmu_sync();
+	MMU_BUGON((va & (PAGE_SIZE - 1)) != 0);
+	MMU_BUGON((pa & (PAGE_SIZE - 1)) != 0);
+
+	uint64_t vstart = va;
+	uint64_t vend = ALIGN_UP(vstart + size, PAGE_SIZE);
+
+	mmu_map_range(__init_pgd, vstart, vend, pa, PGD_LEVEL, attr);
 }
 
 /*
@@ -94,17 +99,24 @@ void mmu_map(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr)
  */
 void *mmu_ioremap(uint64_t pa, uint64_t size)
 {
-	uint64_t va = __PA_VA__(pa);
+	MMU_BUGON((pa & (PAGE_SIZE - 1)) != 0);
 
-	mmu_map(va, pa, size, MMU_REGION_DEVICE);
-	mmu_sync();
-	return (void *)va;
+	uint64_t vstart = __PA_VA__(pa);
+	uint64_t vend = ALIGN_UP(vstart + size, PAGE_SIZE);
+
+	mmu_map_range(__init_pgd, vstart, vend, pa, PGD_LEVEL, MMU_REGION_DEVICE);
+
+	return (void *)vstart;
 }
 
 void mmu_switch_pgd(uint64_t pgd)
 {
 	sys_reg_write(TTBR1_EL1, pgd);
-	mmu_sync();
+	isb();
+	dsb_ish();
+	tlbi_vmall();
+	dsb_ish();
+	isb();
 }
 
 void mmu_disable_ttbr0(void)
@@ -112,8 +124,7 @@ void mmu_disable_ttbr0(void)
 	uint64_t tcr = sys_reg_read(TCR_EL1);
 	tcr |= (1ULL << 7);		/* EPD0: disable TTBR0 walks */
 	sys_reg_write(TCR_EL1, tcr);
-	__asm__ volatile("isb" ::: "memory");
+	isb();
 	sys_reg_write(TTBR0_EL1, 0);
-	__asm__ volatile("isb" ::: "memory");
-	mmu_sync();
+	isb();
 }

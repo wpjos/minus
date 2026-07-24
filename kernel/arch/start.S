@@ -44,6 +44,12 @@ start_in_el3:
 
 start_in_el2:
 	// --- 以下是在 EL2 下执行的配置 ---
+	// 允许 EL1 访问 physical counter/timer，否则 EL1 访问 CNTP_*_EL0 会 trap 到 EL2
+	mrs	x0, cnthctl_el2
+	orr	x0, x0, #((1 << 0) | (1 << 1)) // EL1PCTEN | EL1PCEN
+	msr	cnthctl_el2, x0
+	isb
+
 	// 先读出原始 HCR_EL2 传给 early_mmu_init 诊断，然后强制清零只留 RW=1
 	mrs	x0, hcr_el2
 	mov	x1, #(1 << 31)      // HCR_EL2.RW = 1, 其余清零（包括 VM=0）
