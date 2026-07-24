@@ -1,4 +1,6 @@
+obj-y += gic.o
 obj-y += gic_v3.o
+obj-y += gic_v2.o
 
 ccflags-y := -I$(TOPDIR)/kernel/driver/gic
 

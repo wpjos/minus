@@ -1,4 +1,5 @@
 #include "gic_v3.h"
+#include "gic.h"
 #include "platform.h"
 #include "module.h"
 #include "irq.h"
@@ -299,6 +300,8 @@ static void gic_cpu_init(void)
 /*
  * Platform probe
  */
+static const struct gic_ops gic_v3_ops;
+
 static int gic_probe(struct platform_device *pdev)
 {
 	struct resource *res_d, *res_r;
@@ -320,6 +323,8 @@ static int gic_probe(struct platform_device *pdev)
 	gic_dist_init();
 	gic_redist_init();
 	gic_cpu_init();
+
+	gic_register_ops(&gic_v3_ops);
 
 	return 0;
 }
@@ -345,7 +350,7 @@ module_register(gic, MODULE_LEVEL_HIGH, gic_init);
 /*
  * Public API implementation
  */
-int gic_irq_enable(unsigned int irq)
+static int gic_v3_irq_enable(unsigned int irq)
 {
 	if (irq >= GIC_NR_IRQS)
 		return -1;
@@ -357,7 +362,7 @@ int gic_irq_enable(unsigned int irq)
 	return 0;
 }
 
-int gic_irq_disable(unsigned int irq)
+static int gic_v3_irq_disable(unsigned int irq)
 {
 	if (irq >= GIC_NR_IRQS)
 		return -1;
@@ -369,7 +374,7 @@ int gic_irq_disable(unsigned int irq)
 	return 0;
 }
 
-int gic_irq_set_priority(unsigned int irq, uint8_t prio)
+static int gic_v3_irq_set_priority(unsigned int irq, uint8_t prio)
 {
 	if (irq >= GIC_NR_IRQS)
 		return -1;
@@ -378,7 +383,7 @@ int gic_irq_set_priority(unsigned int irq, uint8_t prio)
 	return 0;
 }
 
-int gic_irq_set_type(unsigned int irq, unsigned int type)
+static int gic_v3_irq_set_type(unsigned int irq, unsigned int type)
 {
 	if (irq >= GIC_NR_IRQS)
 		return -1;
@@ -387,7 +392,7 @@ int gic_irq_set_type(unsigned int irq, unsigned int type)
 	return 0;
 }
 
-int gic_irq_set_group(unsigned int irq, unsigned int group)
+static int gic_v3_irq_set_group(unsigned int irq, unsigned int group)
 {
 	if (irq >= GIC_NR_IRQS)
 		return -1;
@@ -399,7 +404,7 @@ int gic_irq_set_group(unsigned int irq, unsigned int group)
 /*
  * IRQ handler registration and dispatch
  */
-int gic_request_irq(unsigned int irq, irq_handler_t handler, void *dev_id)
+static int gic_v3_request_irq(unsigned int irq, irq_handler_t handler, void *dev_id)
 {
 	if (irq >= GIC_MAX_HANDLERS)
 		return -1;
@@ -409,7 +414,7 @@ int gic_request_irq(unsigned int irq, irq_handler_t handler, void *dev_id)
 	return 0;
 }
 
-void gic_handle_irq(void)
+static void gic_v3_handle_irq(void)
 {
 	unsigned int irq;
 	irq_handler_t handler;
@@ -426,3 +431,13 @@ void gic_handle_irq(void)
 
 	gic_set_icc_eoir1_el1(irq);
 }
+
+static const struct gic_ops gic_v3_ops = {
+	.irq_enable = gic_v3_irq_enable,
+	.irq_disable = gic_v3_irq_disable,
+	.irq_set_priority = gic_v3_irq_set_priority,
+	.irq_set_type = gic_v3_irq_set_type,
+	.irq_set_group = gic_v3_irq_set_group,
+	.request_irq = gic_v3_request_irq,
+	.handle_irq = gic_v3_handle_irq,
+};

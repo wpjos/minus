@@ -1,6 +1,5 @@
 #include "irq.h"
-#include "gic_v3.h"
-#include "types.h"
+#include "gic.h"
 
 /* Defined in vectors.S */
 extern char vector_table[];
@@ -28,6 +27,7 @@ void handle_fiq_exception(struct pt_regs *regs)
 
 void handle_bad_exception(struct pt_regs *regs)
 {
+	(void)regs;
 	while (1);
 }
 
