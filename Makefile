@@ -3,18 +3,6 @@
 MAKEFLAGS += -s
 MINUS_VERSION := 0.1
 MINUS_ARCH    := aarch64
-MINUS_PLAT    := qemu-virt
-
-# Platform-specific physical load address.
-# Different machines may load the kernel image at different physical addresses;
-# keep this in the build system rather than hardcoding it in headers.
-ifeq ($(MINUS_PLAT),qemu-virt)
-MINUS_PHYS_LOAD_OFFSET := 0x40080000
-endif
-
-ifeq ($(MINUS_PLAT),raspi5)
-MINUS_PHYS_LOAD_OFFSET := 0x80000
-endif
 
 # 交叉编译器配置（Linux 内核风格）
 CROSS_COMPILE ?= aarch64-elf-
@@ -36,7 +24,6 @@ KBUILD_CPPFLAGS := -I $(TOPDIR)/include/base \
                    -I $(TOPDIR)/include/arch \
                    -I $(TOPDIR)/include/fdt \
                    -I $(TOPDIR)/lib/libfdt \
-                   -DPHYS_LOAD_OFFSET=$(MINUS_PHYS_LOAD_OFFSET)
 
 # 编译标志（AArch64 裸机必备）
 KBUILD_CFLAGS := $(KBUILD_CPPFLAGS) \

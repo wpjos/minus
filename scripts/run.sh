@@ -15,7 +15,7 @@ fi
 # 输出目录（匹配 Kbuild 体系的 output/）
 OUTDIR=`pwd`/output
 # 内核镜像（Kbuild 编译产物）
-KERNEL_ELF=${OUTDIR}/kernel.elf
+KERNEL_ELF=${OUTDIR}/kernel.bin
 
 # QEMU 核心参数（AArch64 virt 平台）
 QEMU_CMD="qemu-system-aarch64 \

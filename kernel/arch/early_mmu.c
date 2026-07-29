@@ -7,6 +7,9 @@
 #include "page.h"
 #include "cache.h"
 
+/* Placed in .data so the value written by start.S survives early_mmu_init's bss zeroing. */
+__attribute__((section(".data"))) unsigned long g_load_offset;
+
 extern uint64_t __attribute__((visibility("hidden"))) __early_init_pgd[PTE_ENTRIES];
 extern uint64_t __attribute__((visibility("hidden"))) __early_idmap_pgd[PTE_ENTRIES];
 extern uint64_t __attribute__((visibility("hidden"))) __init_pgd[PTE_ENTRIES];

@@ -42,14 +42,17 @@
  */
 #define EARLY_MMU_POOL_SIZE	(ULL(1) << 16)	/* 64k */
 
-#ifndef PHYS_LOAD_OFFSET
-#error "PHYS_LOAD_OFFSET must be defined by the build system"
-#endif
-#define LOAD_OFFSET		(PHYS_LOAD_OFFSET - VIRT_LOAD_OFFSET)
+#ifndef __LINKER__
+/*
+ * Physical/virtual offset computed at boot time by start.S.
+ * It equals (physical_load_address - VIRT_LOAD_OFFSET) and is written to
+ * memory before any C code runs, so the conversion macros below work at
+ * runtime without a platform-specific PHYS_LOAD_OFFSET build flag.
+ */
+extern unsigned long g_load_offset;
 
-#define AT(x)			AT(ADDR(x) + LOAD_OFFSET)
-
-#define __VA_PA__(x)		((unsigned long)(x) + LOAD_OFFSET)
-#define __PA_VA__(x)		((unsigned long)(x) - LOAD_OFFSET)
+#define __VA_PA__(x)		((unsigned long)(x) + g_load_offset)
+#define __PA_VA__(x)		((unsigned long)(x) - g_load_offset)
+#endif /* __LINKER__ */
 
 #endif /* __ARCH_MEMORY_H__ */

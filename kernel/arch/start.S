@@ -74,6 +74,10 @@ start_in_el1:
 	adr	x19, 1f
 	ldr	x20, =1f
 	sub	x19, x19, x20
+	/* Save runtime LOAD_OFFSET (phys - virt) for C code. */
+	ldr	x20, =g_load_offset
+	add	x20, x20, x19
+	str	x19, [x20]
 1:
 	/* Use SP_EL1 for exceptions */
 	msr	spsel, #1

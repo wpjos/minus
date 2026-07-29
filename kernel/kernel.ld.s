@@ -5,7 +5,7 @@ SECTIONS
 {
 	. = VIRT_LOAD_OFFSET;
 	__image_start = .;
-	.text : AT(.text) {
+	.text : {
 		__text_start = .;
 		*(.text.head)
 		*(.text)
