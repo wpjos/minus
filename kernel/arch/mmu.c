@@ -69,7 +69,7 @@ static void mmu_map_range(uint64_t *table, uint64_t vstart,
 		if (level == PTE_LEVEL) {
 			MMU_BUGON(chunk != size);
 			mmu_populate(&table[idx], PTE_PAGE(pa, attr));
-		} else if (chunk == size && (va & (size - 1)) == 0 && (pa & (size - 1)) == 0) {
+		} else if (chunk == size && (pa & (size - 1)) == 0) {
 			mmu_populate(&table[idx], PTE_BLOCK(pa, attr));
 		} else {
 			uint64_t *ntable = mmu_get_ntable(table, idx);
@@ -83,13 +83,19 @@ static void mmu_map_range(uint64_t *table, uint64_t vstart,
 
 void mmu_map(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr)
 {
-	MMU_BUGON((va & (PAGE_SIZE - 1)) != 0);
-	MMU_BUGON((pa & (PAGE_SIZE - 1)) != 0);
+	uint64_t vstart = ALIGN_DOWN(va, PAGE_SIZE);
+	uint64_t vend = ALIGN_UP(va + size, PAGE_SIZE);
+	uint64_t pstart = pa - (va - vstart);
 
-	uint64_t vstart = va;
-	uint64_t vend = ALIGN_UP(vstart + size, PAGE_SIZE);
+	/*
+	 * Page tables can only describe whole pages.  Expand the requested
+	 * range to page boundaries and shift the physical start by the same
+	 * amount so that @va still maps to @pa.  The adjusted physical start
+	 * must itself be page aligned.
+	 */
+	MMU_BUGON((pstart & (PAGE_SIZE - 1)) != 0);
 
-	mmu_map_range(__init_pgd, vstart, vend, pa, PGD_LEVEL, attr);
+	mmu_map_range(__init_pgd, vstart, vend, pstart, PGD_LEVEL, attr);
 }
 
 /*

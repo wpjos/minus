@@ -1,3 +1,0 @@
-obj-y += cortex-a72-virt.o
-
-include $(TOPDIR)/scripts/Kbuild.include

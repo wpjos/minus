@@ -2,7 +2,6 @@
 # 声明要编译的子目录（仅告诉 Kbuild 体系：需要编译这些目录）
 obj-y += lib/
 obj-y += kernel/
-obj-y += dts/
 
 # 声明最终目标（仅定义目标名，实现逻辑在 include 文件）
 all: $(OUTPUT)/kernel.elf

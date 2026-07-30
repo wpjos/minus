@@ -15,14 +15,16 @@ fi
 # 输出目录（匹配 Kbuild 体系的 output/）
 OUTDIR=`pwd`/output
 # 内核镜像（Kbuild 编译产物）
-KERNEL_ELF=${OUTDIR}/kernel.bin
+KERNEL=${OUTDIR}/kernel.bin
+DTB=$OUTDIR/dtb/cortex-a72-virt.dtb
 
 # QEMU 核心参数（AArch64 virt 平台）
 QEMU_CMD="qemu-system-aarch64 \
     -M virt,gic-version=3 \
     -cpu cortex-a72 \
     -m 1G \
-    -kernel ${KERNEL_ELF} \
+    -kernel ${KERNEL} \
+    -dtb ${DTB} \
     -nographic \
     ${DEBUG_FLAGS}"
 

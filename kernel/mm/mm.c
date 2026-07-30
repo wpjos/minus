@@ -14,7 +14,6 @@ extern uint64_t __init_pgd[PTE_ENTRIES];
 static void create_kernel_pgtable(uint64_t *pgd)
 {
 	extern char __text_start[], __init_end[];
-	extern char __dtb_start[], __dtb_end[];
 	extern char __pgtable_start[], __pgtable_end[];
 	extern char __rodata_start[], __rodata_end[];
 	extern char __data_start[], __data_end[];
@@ -27,7 +26,6 @@ static void create_kernel_pgtable(uint64_t *pgd)
 } while (0)
 
 	CREATE_PTABLE(pgd, __text_start, __init_end, MMU_REGION_NORMAL_RO);
-	CREATE_PTABLE(pgd, __dtb_start, __dtb_end, MMU_REGION_NORMAL_RO | PTE_PXN | PTE_UXN);
 	CREATE_PTABLE(pgd, __pgtable_start, __pgtable_end, MMU_REGION_NORMAL_XN | PTE_UXN);
 	CREATE_PTABLE(pgd, __rodata_start, __rodata_end, MMU_REGION_NORMAL_RO);
 	CREATE_PTABLE(pgd, __data_start, __data_end, MMU_REGION_NORMAL_XN | PTE_UXN);

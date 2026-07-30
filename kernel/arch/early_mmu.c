@@ -6,9 +6,18 @@
 #include "mm.h"
 #include "page.h"
 #include "cache.h"
+#include "fdt.h"
+#include "printk.h"
 
 /* Placed in .data so the value written by start.S survives early_mmu_init's bss zeroing. */
 __attribute__((section(".data"))) unsigned long g_load_offset;
+
+/* DTB physical address saved by start.S (x0 from the bootloader). */
+__attribute__((section(".data"))) unsigned long g_dtb_base;
+
+/* Size and kernel virtual address of the mapped DTB. */
+uint32_t g_dtb_size;
+uint64_t g_dtb_virt;
 
 extern uint64_t __attribute__((visibility("hidden"))) __early_init_pgd[PTE_ENTRIES];
 extern uint64_t __attribute__((visibility("hidden"))) __early_idmap_pgd[PTE_ENTRIES];
@@ -23,6 +32,29 @@ extern uint64_t __attribute__((visibility("hidden"))) g_level_shift[];
 #define FIXMAP_SLOT_PTE		3
 
 static bool g_early_mmu_on = false;
+
+/*
+ * Map the DTB passed by the bootloader into the initial high-VA page table.
+ * This is done while the MMU is still off, so we read the DTB header directly
+ * from the physical address saved by start.S.
+ */
+static void early_mmu_map_dtb(void)
+{
+	const struct fdt_header *hdr;
+
+	if (!g_dtb_base)
+		return;
+
+	hdr = (const struct fdt_header *)g_dtb_base;
+	if (fdt32_to_cpu(hdr->magic) != FDT_MAGIC)
+		return;
+
+	g_dtb_virt = __PA_VA__(g_dtb_base);
+	g_dtb_size = fdt32_to_cpu(hdr->totalsize);
+
+	early_mmu_map(__early_init_pgd, g_dtb_virt, g_dtb_base, g_dtb_size,
+		      MMU_REGION_NORMAL);
+}
 
 /*
  * Simple bump allocator used while building the initial page tables with the
@@ -197,7 +229,7 @@ static void early_mmu_map_range(uint64_t *table, uint64_t vstart,
 		if (level == PTE_LEVEL) {
 			MMU_BUGON(chunk != size);
 			early_mmu_populate(&table[idx], PTE_PAGE(pa, attr));
-		} else if (chunk == size && (va & (size - 1)) == 0 && (pa & (size - 1)) == 0) {
+		} else if (chunk == size && (pa & (size - 1)) == 0) {
 			early_mmu_populate(&table[idx], PTE_BLOCK(pa, attr));
 		} else {
 			uint64_t *ntable = early_mmu_get_ntable(table, idx, level + 1);
@@ -212,7 +244,29 @@ static void early_mmu_map_range(uint64_t *table, uint64_t vstart,
 void early_mmu_map(uint64_t *table, uint64_t va, uint64_t pa,
 		   uint64_t size, uint64_t attr)
 {
-	early_mmu_map_range(table, va, va + size, pa, PGD_LEVEL, attr);
+	uint64_t vstart = ALIGN_DOWN(va, PAGE_SIZE);
+	uint64_t vend = ALIGN_UP(va + size, PAGE_SIZE);
+	uint64_t pstart = pa - (va - vstart);
+
+	/*
+	 * Page tables can only describe whole pages.  Expand the requested
+	 * range to page boundaries and shift the physical start by the same
+	 * amount so that @va still maps to @pa.  The adjusted physical start
+	 * must itself be page aligned.
+	 */
+	MMU_BUGON((pstart & (PAGE_SIZE - 1)) != 0);
+
+	early_mmu_map_range(table, vstart, vend, pstart, PGD_LEVEL, attr);
+}
+
+static void early_mmu_debug(void)
+{
+	// raspi5 uart
+	early_mmu_map(__early_idmap_pgd, 0x107d001000, 0x107d001000,
+		      PAGE_SIZE, MMU_REGION_DEVICE);
+	// qemu uart
+	early_mmu_map(__early_idmap_pgd, 0x9000000, 0x9000000,
+		      PAGE_SIZE, MMU_REGION_DEVICE);
 }
 
 void early_mmu_init(void)
@@ -238,6 +292,8 @@ void early_mmu_init(void)
 	 */
 	early_mmu_map(__early_idmap_pgd, image_start_pa, image_start_pa,
 		      image_size, MMU_REGION_NORMAL);
+
+	early_mmu_debug();
 	/*
 	 * Map the kernel at its linked high virtual address.
 	 * This is the mapping the kernel uses once it jumps to VA space.
@@ -257,6 +313,8 @@ void early_mmu_init(void)
 			  & PTE_PHYS_MASK;
 	early_mmu_set_fixmap(FIXMAP_PGTBL, fixmap_pte_page,
 			     MMU_REGION_NORMAL);
+
+	early_mmu_map_dtb();
 
 	dsb_ish();
 

@@ -16,6 +16,9 @@ TOPDIR        := $(CURDIR)
 OUTPUT        := $(TOPDIR)/output
 TARGET        := $(OUTPUT)/kernel.elf
 BIN_TARGET    := $(OUTPUT)/kernel.bin
+DTB_DIR       := $(OUTPUT)/dtb
+DTB_SRCS      := $(wildcard $(TOPDIR)/dts/*.dts)
+DTBS          := $(patsubst $(TOPDIR)/dts/%.dts,$(DTB_DIR)/%.dtb,$(DTB_SRCS))
 
 # 公共头文件搜索路径（C/汇编/链接脚本预处理共用）
 KBUILD_CPPFLAGS := -I $(TOPDIR)/include/base \
@@ -41,16 +44,17 @@ KBUILD_LDFLAGS := -m aarch64elf \
                   -T $(OUTPUT)/kernel.ld
 
 # ===================== 核心目标 =====================
-# 默认目标：编译内核 + 生成二进制文件
-all: prepare $(TARGET) $(BIN_TARGET)
+# 默认目标：编译内核 + 生成二进制文件 + 编译设备树
+all: prepare $(TARGET) $(BIN_TARGET) dtbs
 	@echo "\033[32m[Minus] Compile success! 🚀\033[0m"
 	@echo "\033[32m  ELF: $(TARGET)\033[0m"
 	@echo "\033[32m  BIN: $(BIN_TARGET)\033[0m"
+	@echo "\033[32m  DTB: $(DTB_DIR)/\033[0m"
 
 # 准备输出目录（自动创建，避免报错）
 prepare:
 	@echo "\033[33m[Minus] Preparing output dir: $(OUTPUT)\033[0m"
-	@mkdir -p $(OUTPUT) $(OUTPUT)/.tmp
+	@mkdir -p $(OUTPUT) $(OUTPUT)/.tmp $(DTB_DIR)
 
 # 调用顶层 Kbuild 执行编译（核心：-f 指定规则文件为 Kbuild）
 $(TARGET):
@@ -70,6 +74,15 @@ $(BIN_TARGET): $(TARGET)
 	@echo "\033[33m[Minus] Generating binary file...\033[0m"
 	$(OBJCOPY) -O binary $< $@
 
+dtbs: $(DTBS)
+	@echo "\033[32m[Minus] DTB files generated:\033[0m"
+	@for dtb in $(DTBS); do echo "\033[32m  $$dtb\033[0m"; done
+
+$(DTB_DIR)/%.dtb: $(TOPDIR)/dts/%.dts
+	@mkdir -p $(DTB_DIR)
+	@echo "\033[33m[Minus] Generating DTB: $@\033[0m"
+	dtc -I dts -O dtb -o $@ $<
+
 # 清理所有产物
 clean:
 	@echo "\033[31m[Minus] Cleaning all output...\033[0m"
@@ -77,4 +90,4 @@ clean:
 	@echo "\033[32m[Minus] Clean success! ✨\033[0m"
 
 # 伪目标声明（避免与同名文件冲突）
-.PHONY: all prepare clean
+.PHONY: all prepare clean dtbs

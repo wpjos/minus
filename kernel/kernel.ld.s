@@ -31,12 +31,6 @@ SECTIONS
 		. = ALIGN(4096);
 		__init_end = .;
 	}
-	.dtb : {
-		__dtb_start = .;
-		*(.dtb);
-		__dtb_end = .;
-		. = ALIGN(4096);
-	}
 	.init.pgtable : {
 		. = ALIGN(4096);
 		__pgtable_start = .;

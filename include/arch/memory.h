@@ -50,6 +50,7 @@
  * runtime without a platform-specific PHYS_LOAD_OFFSET build flag.
  */
 extern unsigned long g_load_offset;
+extern unsigned long g_dtb_base;
 
 #define __VA_PA__(x)		((unsigned long)(x) + g_load_offset)
 #define __PA_VA__(x)		((unsigned long)(x) - g_load_offset)

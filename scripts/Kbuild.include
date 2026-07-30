@@ -8,13 +8,6 @@ $(OBJDIR)/%.o: %.S
 $(OBJDIR)/%.o: %.c
 	$(CC) $(CFLAGS) $(ccflags-y) -c $< -o $@
 
-# 3. dts->.o
-$(OBJDIR)/%.o: %.dts
-	dtc -I dts -O dtb -o $(OBJDIR)/$*.dtb $<
-	$(OBJCOPY) -I binary -O elf64-littleaarch64 -B aarch64 \
-		--rename-section .data=.dtb,alloc,load,readonly,data,contents \
-		$(OBJDIR)/$*.dtb $@
-
 # 声明子目录产物路径（仅定义路径，实现逻辑在 include 文件）
 subdir-y := $(patsubst %/,%,$(filter %/, $(obj-y)))
 subdir-objs := $(foreach dir,$(subdir-y),$(OUTPUT)/.tmp/$(dir)/built-in.o)

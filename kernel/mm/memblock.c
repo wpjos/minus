@@ -10,6 +10,9 @@
 #define MEMBLOCK_MAX_MEMORY	16
 #define MEMBLOCK_MAX_RESERVED	16
 
+extern unsigned long g_dtb_base;
+extern uint32_t g_dtb_size;
+
 /*
  * Linux-style memblock: physical memory and reserved regions are tracked
  * in two small arrays.  The allocator is a simple bump allocator over the
@@ -19,6 +22,7 @@
  * to live until the buddy/page allocator takes over.
  */
 #define MEMBLOCK_KERNEL		0x01	/* kernel image, already mapped */
+#define MEMBLOCK_DTB		0x02
 
 struct memblock_region {
 	uint64_t base;
@@ -181,6 +185,7 @@ void memblock_init(void)
 	extern char __image_end[];
 	struct memblock_region reserves[] = {
 		{0, __VA_PA__(__image_end), MEMBLOCK_KERNEL},
+		{g_dtb_base, g_dtb_size, MEMBLOCK_DTB},
 	};
 	int nr = sizeof(reserves) / sizeof(struct memblock_region);
 	for (int i = 0; i < nr; i++) {

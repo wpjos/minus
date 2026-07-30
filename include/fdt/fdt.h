@@ -3,11 +3,11 @@
 
 #include "libfdt.h"
 
-extern char __dtb_start[];
+extern uint64_t g_dtb_virt;
 
 static inline void *fdt_base(void)
 {
-	return &__dtb_start[0];
+	return (void*)g_dtb_virt;
 }
 
 #define fdt_for_each_node(node, fdt)	\
