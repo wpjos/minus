@@ -1,0 +1,4 @@
+config PLAT
+	string "Target platform"
+	default "virt"
+	# Supported: virt, raspi

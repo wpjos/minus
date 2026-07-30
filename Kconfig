@@ -1,0 +1,9 @@
+mainmenu "Minus Kernel Configuration"
+
+source "arch/Kconfig"
+
+config EARLY_UART
+	hex "Early UART base address"
+	default 0x107d001000 if PLAT = "raspi"
+	default 0x9000000
+	# Physical base address of the early UART used before device-tree probing.

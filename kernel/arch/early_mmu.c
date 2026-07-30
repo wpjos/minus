@@ -261,11 +261,7 @@ void early_mmu_map(uint64_t *table, uint64_t va, uint64_t pa,
 
 static void early_mmu_debug(void)
 {
-	// raspi5 uart
-	early_mmu_map(__early_idmap_pgd, 0x107d001000, 0x107d001000,
-		      PAGE_SIZE, MMU_REGION_DEVICE);
-	// qemu uart
-	early_mmu_map(__early_idmap_pgd, 0x9000000, 0x9000000,
+	early_mmu_map(__early_idmap_pgd, CONFIG_EARLY_UART, CONFIG_EARLY_UART,
 		      PAGE_SIZE, MMU_REGION_DEVICE);
 }
 

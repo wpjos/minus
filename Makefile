@@ -3,6 +3,10 @@
 MAKEFLAGS += -s
 MINUS_VERSION := 0.1
 MINUS_ARCH    := aarch64
+PLAT          ?= virt
+
+# 默认目标仍然是 all（后面 defconfig 等目标不能抢默认）
+.DEFAULT_GOAL := all
 
 # 交叉编译器配置（Linux 内核风格）
 CROSS_COMPILE ?= aarch64-elf-
@@ -31,6 +35,7 @@ KBUILD_CPPFLAGS := -I $(TOPDIR)/include/base \
 # 编译标志（AArch64 裸机必备）
 KBUILD_CFLAGS := $(KBUILD_CPPFLAGS) \
                  -D__MINUS__ \
+                 -include $(TOPDIR)/include/generated/autoconf.h \
                  -march=armv8-a \
                  -mgeneral-regs-only \
                  -ffreestanding \
@@ -43,6 +48,23 @@ KBUILD_CFLAGS := $(KBUILD_CPPFLAGS) \
 KBUILD_LDFLAGS := -m aarch64elf \
                   -T $(OUTPUT)/kernel.ld
 
+# Kconfig / autoconf 生成工具
+KCONFIG_PY    := $(TOPDIR)/scripts/kconfig.py
+DEFCONFIG     := $(TOPDIR)/configs/$(PLAT)_defconfig
+AUTOCONF_H    := $(TOPDIR)/include/generated/autoconf.h
+
+# ===================== Kconfig 目标 =====================
+defconfig:
+	@echo "\033[33m[Minus] Generating .config for PLAT=$(PLAT)...\033[0m"
+	python3 $(KCONFIG_PY) defconfig --defconfig=$(DEFCONFIG)
+
+oldconfig syncconfig:
+	python3 $(KCONFIG_PY) syncconfig
+
+# 自动根据当前 PLAT 生成 autoconf.h（prepare 时调用）
+$(AUTOCONF_H): $(DEFCONFIG) $(TOPDIR)/Kconfig $(TOPDIR)/arch/Kconfig $(KCONFIG_PY)
+	@python3 $(KCONFIG_PY) defconfig --defconfig=$(DEFCONFIG)
+
 # ===================== 核心目标 =====================
 # 默认目标：编译内核 + 生成二进制文件 + 编译设备树
 all: prepare $(TARGET) $(BIN_TARGET) dtbs
@@ -51,8 +73,8 @@ all: prepare $(TARGET) $(BIN_TARGET) dtbs
 	@echo "\033[32m  BIN: $(BIN_TARGET)\033[0m"
 	@echo "\033[32m  DTB: $(DTB_DIR)/\033[0m"
 
-# 准备输出目录（自动创建，避免报错）
-prepare:
+# 准备输出目录（自动创建，避免报错），并同步生成 autoconf.h
+prepare: $(AUTOCONF_H)
 	@echo "\033[33m[Minus] Preparing output dir: $(OUTPUT)\033[0m"
 	@mkdir -p $(OUTPUT) $(OUTPUT)/.tmp $(DTB_DIR)
 
@@ -87,7 +109,9 @@ $(DTB_DIR)/%.dtb: $(TOPDIR)/dts/%.dts
 clean:
 	@echo "\033[31m[Minus] Cleaning all output...\033[0m"
 	$(RM) $(OUTPUT)
+	$(RM) $(TOPDIR)/.config $(TOPDIR)/include/generated
+	$(RM) $(TOPDIR)/scripts/__pycache__
 	@echo "\033[32m[Minus] Clean success! ✨\033[0m"
 
 # 伪目标声明（避免与同名文件冲突）
-.PHONY: all prepare clean dtbs
+.PHONY: all prepare clean dtbs defconfig oldconfig syncconfig

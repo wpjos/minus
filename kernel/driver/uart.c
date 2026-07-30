@@ -11,7 +11,7 @@
 #define UART_CR(base)	(*(volatile uint32_t *)((base) + 0x30))
 
 /* Cached base address, set during probe */
-static uint64_t g_uart_base = 0;
+static uint64_t g_uart_base = CONFIG_EARLY_UART;
 
 void uart_putc(char c)
 {
