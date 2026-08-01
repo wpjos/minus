@@ -86,6 +86,9 @@
 #define MMU_REGION_NORMAL_RO    (PTE_ATTR_NORMAL | PTE_SH_INNER | PTE_AP_RO_EL1)
 #define MMU_REGION_NORMAL_XN    (PTE_ATTR_NORMAL | PTE_SH_INNER | PTE_AP_RW_EL1 | PTE_PXN)
 
+#define MMU_REGION_USER_CODE    (PTE_ATTR_NORMAL | PTE_SH_INNER | PTE_AP_RO_ANY | PTE_PXN)
+#define MMU_REGION_USER_STACK   (PTE_ATTR_NORMAL | PTE_SH_INNER | PTE_AP_RW_ANY | PTE_PXN | PTE_UXN)
+
 /*
  * TCR_EL1 configuration: 4 KB granule, 48-bit VA for both halves,
  * Normal Inner/Outer WBWA, Inner Shareable, 48-bit physical address space.
@@ -146,8 +149,33 @@ void early_mmu_map(uint64_t *table, uint64_t va, uint64_t pa,
 
 void *mmu_ioremap(uint64_t phys, uint64_t size);
 void mmu_sync(void);
-void mmu_map(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr);
-void mmu_disable_ttbr0(void);
-void mmu_switch_pgd(uint64_t pgd);
+void mmu_map(uint64_t *pgd, uint64_t va, uint64_t pa, uint64_t size, uint64_t attr);
+
+/*
+ * Point TTBR0 at an empty (all-invalid) page table.
+ * This keeps TTBR0 walks enabled but guarantees any user VA translation faults.
+ */
+void mmu_clear_ttbr0(void);
+
+/*
+ * Switch the page table base for a translation regime.
+ * @ttbr_reg: system register name, e.g. TTBR1_EL1 or TTBR0_EL1
+ * @pgd_pa:   physical address of the level-0 page table
+ *
+ * The register name is stringified at preprocessing time, so the generated
+ * MSR instruction has no runtime branch and operates on exactly one TTBR.
+ */
+#define mmu_switch_pgd(ttbr_reg, pgd_pa)               \
+	do {                                           \
+		uint64_t _pgd_pa = (uint64_t)(pgd_pa); \
+		__asm__ volatile(                      \
+			"msr " #ttbr_reg ", %0\n"      \
+			"isb\n"                        \
+			"dsb ish\n"                    \
+			"tlbi vmalle1is\n"             \
+			"dsb ish\n"                    \
+			"isb\n"                        \
+			: : "r"(_pgd_pa) : "memory");  \
+	} while (0)
 
 #endif /* __ARCH_MMU_H__ */

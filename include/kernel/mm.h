@@ -16,4 +16,10 @@ void mm_init(void);
 void *kmalloc(size_t size);
 void kfree(void *objp);
 
+/* Allocate physically contiguous pages and zero them. */
+void *kzalloc_pages(size_t size);
+
+/* Free pages allocated by kzalloc_pages/buddy_alloc_pages from a virtual address. */
+void kfree_pages(void *vaddr);
+
 #endif

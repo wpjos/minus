@@ -1,4 +1,4 @@
-obj-y := memblock.o buddy.o slab.o mm.o uaccess.o vma.o
+obj-y := syscall.o
 
 ccflags-y := -I$(TOPDIR)/kernel/mm
 

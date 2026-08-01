@@ -46,7 +46,7 @@ static void switch_pgd(void)
 	create_memblock_pgtable(__init_pgd);
 
 	/* TTBR1_EL1 holds the physical base address of the kernel PGD. */
-	mmu_switch_pgd(__VA_PA__((uint64_t)__init_pgd));
+	mmu_switch_pgd(TTBR1_EL1, __VA_PA__((uint64_t)__init_pgd));
 }
 
 static void early_ptable_free_to_buddy(void)
@@ -78,6 +78,25 @@ static void reclaim_mem_to_buddy(void)
 	buddy_stat();
 }
 
+void *kzalloc_pages(size_t size)
+{
+	struct page *page = buddy_alloc_pages(size);
+	void *vaddr;
+
+	if (!page)
+		return NULL;
+
+	vaddr = page_to_virt(page);
+	memset(vaddr, 0, size);
+	return vaddr;
+}
+
+void kfree_pages(void *vaddr)
+{
+	if (vaddr)
+		buddy_free_pages(virt_to_page(vaddr));
+}
+
 void mm_init(void)
 {
 	memblock_init();
@@ -85,5 +104,5 @@ void mm_init(void)
 	page_env_prepare();
 	reclaim_mem_to_buddy();
 	slab_init();
-	mmu_disable_ttbr0();
+	mmu_clear_ttbr0();
 }

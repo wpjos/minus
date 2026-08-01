@@ -35,12 +35,9 @@ static uint64_t *mmu_get_ntable(uint64_t *table, uint64_t idx)
 	uint64_t phys;
 
 	if (!mmu_entry_populated(table[idx])) {
-		struct page *page = buddy_alloc_pages(PAGE_SIZE);
-		void *vaddr;
+		void *vaddr = kzalloc_pages(PAGE_SIZE);
 
-		MMU_BUGON(page == NULL);
-		vaddr = page_to_virt(page);
-		memset(vaddr, 0, PAGE_SIZE);
+		MMU_BUGON(vaddr == NULL);
 		phys = __VA_PA__((uint64_t)vaddr);
 		mmu_populate(&table[idx], PTE_TABLE(phys));
 		return vaddr;
@@ -81,7 +78,7 @@ static void mmu_map_range(uint64_t *table, uint64_t vstart,
 	}
 }
 
-void mmu_map(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr)
+void mmu_map(uint64_t *pgd, uint64_t va, uint64_t pa, uint64_t size, uint64_t attr)
 {
 	uint64_t vstart = ALIGN_DOWN(va, PAGE_SIZE);
 	uint64_t vend = ALIGN_UP(va + size, PAGE_SIZE);
@@ -95,7 +92,7 @@ void mmu_map(uint64_t va, uint64_t pa, uint64_t size, uint64_t attr)
 	 */
 	MMU_BUGON((pstart & (PAGE_SIZE - 1)) != 0);
 
-	mmu_map_range(__init_pgd, vstart, vend, pstart, PGD_LEVEL, attr);
+	mmu_map_range(pgd, vstart, vend, pstart, PGD_LEVEL, attr);
 }
 
 /*
@@ -115,22 +112,13 @@ void *mmu_ioremap(uint64_t pa, uint64_t size)
 	return (void *)vstart;
 }
 
-void mmu_switch_pgd(uint64_t pgd)
-{
-	sys_reg_write(TTBR1_EL1, pgd);
-	isb();
-	dsb_ish();
-	tlbi_vmall();
-	dsb_ish();
-	isb();
-}
+/*
+ * Reserved empty page table used when no user address space is active.
+ * Lives in BSS, so it is zeroed before any C code runs.
+ */
+static uint64_t __attribute__((aligned(PAGE_SIZE))) g_zero_pgd[PTE_ENTRIES];
 
-void mmu_disable_ttbr0(void)
+void mmu_clear_ttbr0(void)
 {
-	uint64_t tcr = sys_reg_read(TCR_EL1);
-	tcr |= (1ULL << 7);		/* EPD0: disable TTBR0 walks */
-	sys_reg_write(TCR_EL1, tcr);
-	isb();
-	sys_reg_write(TTBR0_EL1, 0);
-	isb();
+	mmu_switch_pgd(TTBR0_EL1, __VA_PA__((uint64_t)g_zero_pgd));
 }

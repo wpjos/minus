@@ -73,6 +73,12 @@ start_in_el2:
 	eret
 
 start_in_el1:
+	/* Enable EL0/EL1 access to FP/SIMD registers (CPACR_EL1.FPEN = 0b11). */
+	mrs	x4, cpacr_el1
+	orr	x4, x4, #(0x3 << 20)
+	msr	cpacr_el1, x4
+	isb
+
 	adr	x19, 1f
 	ldr	x20, =1f
 	sub	x19, x19, x20

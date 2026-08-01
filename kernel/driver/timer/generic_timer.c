@@ -4,12 +4,13 @@
 #include "printk.h"
 #include "irq.h"
 #include "generic_timer.h"
+#include "sched.h"
+#include "task.h"
 
 /* Tick interval in milliseconds */
 #define TICK_MS		10
 
 static unsigned int g_timer_irq;
-static uint64_t g_tick_count;
 
 static int generic_timer_tick_handler(unsigned int irq, void *dev_id)
 {
@@ -19,9 +20,7 @@ static int generic_timer_tick_handler(unsigned int irq, void *dev_id)
 	/* Reload timer to keep ticking */
 	generic_timer_set_cntptval((uint64_t)(generic_timer_get_cntfrq() / 1000 * TICK_MS));
 
-	g_tick_count++;
-	if ((g_tick_count % 100) == 0)
-		printk("tick: %d\n", (int)g_tick_count);
+	scheduler_tick();
 
 	return 0;
 }

@@ -51,6 +51,22 @@ char *strcpy(char *dst, const char *src)
 	return res;
 }
 
+char *strncpy(char *dst, const char *src, size_t n)
+{
+	char *res = dst;
+	size_t i = 0;
+
+	while (i < n && src && *src != '\0') {
+		*dst++ = *src++;
+		i++;
+	}
+	while (i < n) {
+		*dst++ = '\0';
+		i++;
+	}
+	return res;
+}
+
 void *memcpy(void *dst, const void *src, size_t n)
 {
 	if (dst == NULL) {

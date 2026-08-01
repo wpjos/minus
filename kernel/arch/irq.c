@@ -4,33 +4,6 @@
 /* Defined in vectors.S */
 extern char vector_table[];
 
-/*
- * Saved exception frame layout, must match vectors.S
- */
-struct pt_regs {
-	uint64_t x[31];
-	uint64_t elr;
-	uint64_t spsr;
-	uint64_t esr;
-};
-
-void handle_irq_exception(struct pt_regs *regs)
-{
-	(void)regs;
-	gic_handle_irq();
-}
-
-void handle_fiq_exception(struct pt_regs *regs)
-{
-	(void)regs;
-}
-
-void handle_bad_exception(struct pt_regs *regs)
-{
-	(void)regs;
-	while (1);
-}
-
 void irq_init(void)
 {
 	/* Install EL1 vector table as early as possible */

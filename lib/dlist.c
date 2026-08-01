@@ -8,6 +8,14 @@ void dlist_add(struct dlist_node *head, struct dlist_node *node)
 	head->next = node;
 }
 
+void dlist_add_tail(struct dlist_node *head, struct dlist_node *node)
+{
+	node->next = head;
+	node->prev = head->prev;
+	head->prev->next = node;
+	head->prev = node;
+}
+
 void dlist_del(struct dlist_node *node)
 {
 	node->next->prev = node->prev;
