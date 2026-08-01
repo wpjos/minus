@@ -20,8 +20,8 @@ static void create_kernel_pgtable(uint64_t *pgd)
 	extern char __bss_start[], __bss_end[];
 
 #define CREATE_PTABLE(pgtable, start, end, attr) do {		\
-	uint64_t _s = ALIGN_DOWN((uint64_t)(start), PAGE_SIZE);	\
-	uint64_t _e = ALIGN_UP((uint64_t)(end), PAGE_SIZE);		\
+	uintptr_t _s = ALIGN_DOWN((uintptr_t)(start), PAGE_SIZE);	\
+	uintptr_t _e = ALIGN_UP((uintptr_t)(end), PAGE_SIZE);		\
 	early_mmu_map((pgtable), _s, __VA_PA__(_s), _e - _s, (attr)); \
 } while (0)
 
@@ -46,7 +46,7 @@ static void switch_pgd(void)
 	create_memblock_pgtable(__init_pgd);
 
 	/* TTBR1_EL1 holds the physical base address of the kernel PGD. */
-	mmu_switch_pgd(TTBR1_EL1, __VA_PA__((uint64_t)__init_pgd));
+	mmu_switch_pgd(TTBR1_EL1, __VA_PA__((uintptr_t)__init_pgd));
 }
 
 static void early_ptable_free_to_buddy(void)
@@ -64,7 +64,7 @@ static void page_env_prepare(void)
 
 	g_pfn_offset = memblock_mem_start() >> PAGE_SHIFT;
 	total_pages = (memblock_mem_end() - memblock_mem_start()) >> PAGE_SHIFT;
-	pages_pa = (uint64_t)memblock_alloc_aligned(
+	pages_pa = (uintptr_t)memblock_alloc_aligned(
 			total_pages * sizeof(struct page), PAGE_SIZE);
 	g_mem_pages = (struct page *)__PA_VA__(pages_pa);
 	memset(g_mem_pages, 0, total_pages * sizeof(struct page));

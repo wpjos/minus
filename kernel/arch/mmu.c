@@ -30,7 +30,7 @@ static inline void mmu_populate(uint64_t *entry, uint64_t val)
 	dsb_ish();
 }
 
-static uint64_t *mmu_get_ntable(uint64_t *table, uint64_t idx)
+static uint64_t *mmu_get_ntable(uint64_t *table, size_t idx)
 {
 	uint64_t phys;
 
@@ -38,7 +38,7 @@ static uint64_t *mmu_get_ntable(uint64_t *table, uint64_t idx)
 		void *vaddr = kzalloc_pages(PAGE_SIZE);
 
 		MMU_BUGON(vaddr == NULL);
-		phys = __VA_PA__((uint64_t)vaddr);
+		phys = __VA_PA__((uintptr_t)vaddr);
 		mmu_populate(&table[idx], PTE_TABLE(phys));
 		return vaddr;
 	}
@@ -47,16 +47,16 @@ static uint64_t *mmu_get_ntable(uint64_t *table, uint64_t idx)
 	return (uint64_t *)__PA_VA__(phys);
 }
 
-static void mmu_map_range(uint64_t *table, uint64_t vstart,
-			  uint64_t vend, uint64_t pa,
+static void mmu_map_range(uint64_t *table, uintptr_t vstart,
+			  uintptr_t vend, uint64_t pa,
 			  uint32_t level, uint64_t attr)
 {
-	uint64_t va = vstart;
+	uintptr_t va = vstart;
 	uint64_t size = g_level_size[level];
 	uint64_t shift = g_level_shift[level];
 
 	while (va < vend) {
-		uint64_t idx = (va >> shift) & (PTE_ENTRIES - 1);
+		size_t idx = (va >> shift) & (PTE_ENTRIES - 1);
 		uint64_t offset = va & (size - 1);
 		uint64_t chunk = size - offset;
 
@@ -78,10 +78,10 @@ static void mmu_map_range(uint64_t *table, uint64_t vstart,
 	}
 }
 
-void mmu_map(uint64_t *pgd, uint64_t va, uint64_t pa, uint64_t size, uint64_t attr)
+void mmu_map(uint64_t *pgd, uintptr_t va, uint64_t pa, uint64_t size, uint64_t attr)
 {
-	uint64_t vstart = ALIGN_DOWN(va, PAGE_SIZE);
-	uint64_t vend = ALIGN_UP(va + size, PAGE_SIZE);
+	uintptr_t vstart = ALIGN_DOWN(va, PAGE_SIZE);
+	uintptr_t vend = ALIGN_UP(va + size, PAGE_SIZE);
 	uint64_t pstart = pa - (va - vstart);
 
 	/*
@@ -104,8 +104,8 @@ void *mmu_ioremap(uint64_t pa, uint64_t size)
 {
 	MMU_BUGON((pa & (PAGE_SIZE - 1)) != 0);
 
-	uint64_t vstart = __PA_VA__(pa);
-	uint64_t vend = ALIGN_UP(vstart + size, PAGE_SIZE);
+	uintptr_t vstart = __PA_VA__(pa);
+	uintptr_t vend = ALIGN_UP(vstart + size, PAGE_SIZE);
 
 	mmu_map_range(__init_pgd, vstart, vend, pa, PGD_LEVEL, MMU_REGION_DEVICE);
 
@@ -120,5 +120,5 @@ static uint64_t __attribute__((aligned(PAGE_SIZE))) g_zero_pgd[PTE_ENTRIES];
 
 void mmu_clear_ttbr0(void)
 {
-	mmu_switch_pgd(TTBR0_EL1, __VA_PA__((uint64_t)g_zero_pgd));
+	mmu_switch_pgd(TTBR0_EL1, __VA_PA__((uintptr_t)g_zero_pgd));
 }

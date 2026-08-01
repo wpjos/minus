@@ -6,8 +6,8 @@
 #include "mmu.h"
 
 /* Cached MMIO bases */
-static uint64_t g_gicd_base;
-static uint64_t g_gicr_base;
+static uintptr_t g_gicd_base;
+static uintptr_t g_gicr_base;
 static uint64_t g_gicr_size;
 
 /* Number of SPIs supported by the distributor */
@@ -46,17 +46,17 @@ static void gicd_wait_for_rwp(void)
 /*
  * Redistributor helpers (base frame)
  */
-static inline void gicr_write32(uint64_t base, uint32_t off, uint32_t val)
+static inline void gicr_write32(uintptr_t base, uint32_t off, uint32_t val)
 {
 	gic_write32(base, off, val);
 }
 
-static inline uint32_t gicr_read32(uint64_t base, uint32_t off)
+static inline uint32_t gicr_read32(uintptr_t base, uint32_t off)
 {
 	return gic_read32(base, off);
 }
 
-static inline uint64_t gicr_read64(uint64_t base, uint32_t off)
+static inline uint64_t gicr_read64(uintptr_t base, uint32_t off)
 {
 	return gic_read64(base, off);
 }
@@ -64,7 +64,7 @@ static inline uint64_t gicr_read64(uint64_t base, uint32_t off)
 /*
  * SGI/PPI frame helpers
  */
-static inline uint64_t gicr_sgi_base(void)
+static inline uintptr_t gicr_sgi_base(void)
 {
 	return g_gicr_base + GICR_SGI_BASE_OFFSET;
 }
@@ -82,7 +82,7 @@ static inline uint32_t gicr_sgi_read32(uint32_t off)
 /*
  * Bit manipulation for 32-bit grouped registers (one bit per IRQ)
  */
-static inline void gic_irq_bit_op32(uint64_t base, uint32_t reg_off,
+static inline void gic_irq_bit_op32(uintptr_t base, uint32_t reg_off,
 				    unsigned int irq, int set)
 {
 	uint32_t off = reg_off + (irq / 32) * 4;
@@ -96,7 +96,7 @@ static inline void gic_irq_bit_op32(uint64_t base, uint32_t reg_off,
 	gic_write32(base, off, val);
 }
 
-static inline uint32_t gic_irq_bit_read32(uint64_t base, uint32_t reg_off,
+static inline uint32_t gic_irq_bit_read32(uintptr_t base, uint32_t reg_off,
 					  unsigned int irq)
 {
 	uint32_t off = reg_off + (irq / 32) * 4;
@@ -109,7 +109,7 @@ static inline uint32_t gic_irq_bit_read32(uint64_t base, uint32_t reg_off,
  */
 static inline void gic_irq_prio_write(unsigned int irq, uint8_t prio)
 {
-	uint64_t base;
+	uintptr_t base;
 	uint32_t off;
 
 	if (irq <= GIC_MAX_PPI) {
@@ -127,7 +127,7 @@ static inline void gic_irq_prio_write(unsigned int irq, uint8_t prio)
  */
 static inline void gic_irq_cfg_write(unsigned int irq, unsigned int type)
 {
-	uint64_t base;
+	uintptr_t base;
 	uint32_t off;
 	uint32_t shift;
 	uint32_t val;
@@ -152,7 +152,7 @@ static inline void gic_irq_cfg_write(unsigned int irq, unsigned int type)
  */
 static inline void gic_irq_group_write(unsigned int irq, unsigned int group)
 {
-	uint64_t base;
+	uintptr_t base;
 	uint32_t off_group, off_mod;
 	uint32_t bit;
 
@@ -312,8 +312,8 @@ static int gic_probe(struct platform_device *pdev)
 		return -1;
 	}
 
-	g_gicd_base = (uint64_t)mmu_ioremap(res_d->start, resource_size(res_d));
-	g_gicr_base = (uint64_t)mmu_ioremap(res_r->start, resource_size(res_r));
+	g_gicd_base = (uintptr_t)mmu_ioremap(res_d->start, resource_size(res_d));
+	g_gicr_base = (uintptr_t)mmu_ioremap(res_r->start, resource_size(res_r));
 	if (!g_gicd_base || !g_gicr_base)
 		return -1;
 

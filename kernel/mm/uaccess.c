@@ -10,7 +10,7 @@ long copy_from_user(void *to, const void *from, size_t n)
 {
 	struct mm_struct *mm = current->mm;
 	uint8_t *dst = to;
-	uint64_t addr = (uint64_t)from;
+	uintptr_t addr = (uintptr_t)from;
 	size_t left = n;
 
 	if (!mm)
@@ -42,7 +42,7 @@ long copy_to_user(void *to, const void *from, size_t n)
 {
 	struct mm_struct *mm = current->mm;
 	const uint8_t *src = from;
-	uint64_t addr = (uint64_t)to;
+	uintptr_t addr = (uintptr_t)to;
 	size_t left = n;
 
 	if (!mm)

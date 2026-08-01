@@ -3,7 +3,7 @@
 
 #include "libfdt.h"
 
-extern uint64_t g_dtb_virt;
+extern uintptr_t g_dtb_virt;
 
 static inline void *fdt_base(void)
 {

@@ -11,7 +11,7 @@
 #define UART_CR(base)	(*(volatile uint32_t *)((base) + 0x30))
 
 /* Cached base address, set during probe */
-static uint64_t g_uart_base = CONFIG_EARLY_UART;
+static uintptr_t g_uart_base = CONFIG_EARLY_UART;
 
 void uart_putc(char c)
 {
@@ -36,7 +36,7 @@ static int uart_probe(struct platform_device *pdev)
 		return -1;
 	}
 
-	g_uart_base = (uint64_t)mmu_ioremap(res->start, resource_size(res));
+	g_uart_base = (uintptr_t)mmu_ioremap(res->start, resource_size(res));
 	if (!g_uart_base)
 		return -1;
 

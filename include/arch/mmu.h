@@ -144,12 +144,12 @@ static inline bool mmu_entry_populated(uint64_t entry)
 }
 
 void early_mmu_init(void);
-void early_mmu_map(uint64_t *table, uint64_t va, uint64_t pa,
+void early_mmu_map(uint64_t *table, uintptr_t va, uint64_t pa,
 		   uint64_t size, uint64_t attr);
 
 void *mmu_ioremap(uint64_t phys, uint64_t size);
 void mmu_sync(void);
-void mmu_map(uint64_t *pgd, uint64_t va, uint64_t pa, uint64_t size, uint64_t attr);
+void mmu_map(uint64_t *pgd, uintptr_t va, uint64_t pa, uint64_t size, uint64_t attr);
 
 /*
  * Point TTBR0 at an empty (all-invalid) page table.

@@ -16,7 +16,7 @@ static inline void tlbi_vmall(void)
 	__asm__ volatile("tlbi vmalle1is"::: "memory");
 }
 
-static inline void tlbi_va(uint64_t va)
+static inline void tlbi_va(uintptr_t va)
 {
 	__asm__ volatile("tlbi vae1is, %0"::"r"(va >> 12): "memory");
 }

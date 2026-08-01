@@ -17,7 +17,7 @@ __attribute__((section(".data"))) unsigned long g_dtb_base;
 
 /* Size and kernel virtual address of the mapped DTB. */
 uint32_t g_dtb_size;
-uint64_t g_dtb_virt;
+uintptr_t g_dtb_virt;
 
 extern uint64_t __attribute__((visibility("hidden"))) __early_init_pgd[PTE_ENTRIES];
 extern uint64_t __attribute__((visibility("hidden"))) __early_idmap_pgd[PTE_ENTRIES];
@@ -62,23 +62,23 @@ static void early_mmu_map_dtb(void)
  * boot assembly code, which sits just after the kernel image.
  */
 struct early_allocator {
-	uint64_t start;
-	uint64_t curr;
-	uint64_t end;
+	uintptr_t start;
+	uintptr_t curr;
+	uintptr_t end;
 } early_ator;
 
 static void early_mmu_reserve_ator(void)
 {
 	extern char __attribute__((visibility("hidden"))) __early_mmu_pool_start[];
 	extern char __attribute__((visibility("hidden"))) __early_mmu_pool_end[];
-	early_ator.start = (uint64_t)__early_mmu_pool_start;
-	early_ator.end = (uint64_t)__early_mmu_pool_end;
-	early_ator.curr = (uint64_t)__early_mmu_pool_start;
+	early_ator.start = (uintptr_t)__early_mmu_pool_start;
+	early_ator.end = (uintptr_t)__early_mmu_pool_end;
+	early_ator.curr = (uintptr_t)__early_mmu_pool_start;
 }
 
-static uint64_t early_mmu_reserve_alloc(uint64_t size)
+static uintptr_t early_mmu_reserve_alloc(uintptr_t size)
 {
-	uint64_t aligned = ALIGN_UP(early_ator.curr, size);
+	uintptr_t aligned = ALIGN_UP(early_ator.curr, size);
 
 	MMU_BUGON(aligned < early_ator.curr);
 	MMU_BUGON(aligned + size > early_ator.end);
@@ -87,10 +87,10 @@ static uint64_t early_mmu_reserve_alloc(uint64_t size)
 	return aligned;
 }
 
-static uint64_t early_mmu_alloc_page(void)
+static uintptr_t early_mmu_alloc_page(void)
 {
 	if (g_early_mmu_on)
-		return (uint64_t)memblock_alloc_aligned(PAGE_SIZE, PAGE_SIZE);
+		return (uintptr_t)memblock_alloc_aligned(PAGE_SIZE, PAGE_SIZE);
 	return early_mmu_reserve_alloc(PAGE_SIZE);
 }
 
@@ -98,13 +98,13 @@ static uint64_t early_mmu_alloc_page(void)
  * Pre-MMU walker: returns a physical pointer into the page tables for @va.
  * Valid only while the MMU is off.
  */
-static uint64_t *early_mmu_get_pte(uint64_t va)
+static uint64_t *early_mmu_get_pte(uintptr_t va)
 {
 	uint64_t *table = __early_init_pgd;
 
 	for (int level = PGD_LEVEL; level < PTE_LEVEL; level++) {
 		uint64_t shift = g_level_shift[level];
-		uint64_t idx = (va >> shift) & (PTE_ENTRIES - 1);
+		size_t idx = (va >> shift) & (PTE_ENTRIES - 1);
 		table = (uint64_t *)(table[idx] & PTE_PHYS_MASK);
 	}
 
@@ -116,15 +116,15 @@ static uint64_t *early_mmu_get_pte(uint64_t va)
  * pointers and are used only to set up the FIXMAP_PGTBL self-mapping before
  * the MMU is enabled.
  */
-static void early_mmu_set_fixmap(uint64_t va, uint64_t pa, uint64_t attr)
+static void early_mmu_set_fixmap(uintptr_t va, uint64_t pa, uint64_t attr)
 {
 	uint64_t *pte = early_mmu_get_pte(va);
 	*pte = PTE_PAGE(pa, attr);
 }
 
-static uint64_t early_mmu_fixmap_va(int slot)
+static uintptr_t early_mmu_fixmap_va(int slot)
 {
-	return FIXMAP_ADDR + ((uint64_t)slot << PAGE_SHIFT);
+	return FIXMAP_ADDR + ((uintptr_t)slot << PAGE_SHIFT);
 }
 
 /*
@@ -145,10 +145,10 @@ static inline void early_mmu_populate(uint64_t *entry, uint64_t val)
 	}
 }
 
-static uint64_t early_mmu_fixmap_set(uint64_t pa, uint32_t level)
+static uintptr_t early_mmu_fixmap_set(uint64_t pa, uint32_t level)
 {
 	uint32_t slot = FIXMAP_SLOT_PGTBL + level;
-	uint64_t va = early_mmu_fixmap_va(slot);
+	uintptr_t va = early_mmu_fixmap_va(slot);
 	uint64_t *pte = early_mmu_fixmap_pte(slot);
 	uint64_t val = PTE_PAGE(pa, MMU_REGION_NORMAL);
 
@@ -167,11 +167,11 @@ static uint64_t early_mmu_fixmap_set(uint64_t pa, uint32_t level)
  *   - MMU off: physical pointer
  *   - MMU on: fixmap virtual address
  */
-static uint64_t *early_mmu_get_ntable(uint64_t *table, uint64_t idx,
+static uint64_t *early_mmu_get_ntable(uint64_t *table, size_t idx,
 				      uint32_t level)
 {
-	uint64_t phys;
-	uint64_t vaddr;
+	uintptr_t phys;
+	uintptr_t vaddr;
 	bool allocated = false;
 
 	if (!mmu_entry_populated(table[idx])) {
@@ -194,7 +194,7 @@ static uint64_t *early_mmu_get_ntable(uint64_t *table, uint64_t idx,
 	return (uint64_t *)vaddr;
 }
 
-static inline uint64_t early_mmu_at(uint64_t va) {
+static inline uint64_t early_mmu_at(uintptr_t va) {
 	uint64_t par;
 	__asm__ volatile (
 		"at  s1e1r, %1\n\t"
@@ -210,16 +210,16 @@ static inline uint64_t early_mmu_at(uint64_t va) {
 	return (par & 0xFFFFFFFFF000ULL) | (va & 0xFFF);
 }
 
-static void early_mmu_map_range(uint64_t *table, uint64_t vstart,
-				uint64_t vend, uint64_t pa,
+static void early_mmu_map_range(uint64_t *table, uintptr_t vstart,
+				uintptr_t vend, uint64_t pa,
 				uint32_t level, uint64_t attr)
 {
-	uint64_t va = vstart;
+	uintptr_t va = vstart;
 	uint64_t size = g_level_size[level];
 	uint64_t shift = g_level_shift[level];
 
 	while (va < vend) {
-		uint64_t idx = (va >> shift) & (PTE_ENTRIES - 1);
+		size_t idx = (va >> shift) & (PTE_ENTRIES - 1);
 		uint64_t offset = va & (size - 1);
 		uint64_t chunk = size - offset;
 
@@ -241,11 +241,11 @@ static void early_mmu_map_range(uint64_t *table, uint64_t vstart,
 	}
 }
 
-void early_mmu_map(uint64_t *table, uint64_t va, uint64_t pa,
+void early_mmu_map(uint64_t *table, uintptr_t va, uint64_t pa,
 		   uint64_t size, uint64_t attr)
 {
-	uint64_t vstart = ALIGN_DOWN(va, PAGE_SIZE);
-	uint64_t vend = ALIGN_UP(va + size, PAGE_SIZE);
+	uintptr_t vstart = ALIGN_DOWN(va, PAGE_SIZE);
+	uintptr_t vend = ALIGN_UP(va + size, PAGE_SIZE);
 	uint64_t pstart = pa - (va - vstart);
 
 	/*
@@ -269,10 +269,10 @@ void early_mmu_init(void)
 {
 	extern char __attribute__((visibility("hidden"))) __bss_start[], __bss_end[];
 	extern char __attribute__((visibility("hidden"))) __image_start[], __image_end[];
-	uint64_t image_start_pa = (uint64_t)__image_start;
-	uint64_t image_start_va = __PA_VA__(image_start_pa);
-	uint64_t image_size = (uint64_t)(__image_end - __image_start);
-	uint64_t bss_size = (uint64_t)(__bss_end - __bss_start);
+	uint64_t image_start_pa = (uintptr_t)__image_start;
+	uintptr_t image_start_va = __PA_VA__(image_start_pa);
+	uint64_t image_size = (uintptr_t)(__image_end - __image_start);
+	uint64_t bss_size = (uintptr_t)(__bss_end - __bss_start);
 	uint64_t fixmap_pte_page;
 	uint64_t sctlr;
 
@@ -305,7 +305,7 @@ void early_mmu_init(void)
 	 * PTE page that governs the fixmap area itself.  After the MMU is on this
 	 * lets software rewrite any fixmap PTE without needing another mapping.
 	 */
-	fixmap_pte_page = ((uint64_t)early_mmu_get_pte(FIXMAP_ADDR))
+	fixmap_pte_page = ((uintptr_t)early_mmu_get_pte(FIXMAP_ADDR))
 			  & PTE_PHYS_MASK;
 	early_mmu_set_fixmap(FIXMAP_PGTBL, fixmap_pte_page,
 			     MMU_REGION_NORMAL);
@@ -317,8 +317,8 @@ void early_mmu_init(void)
 	/* Configure translation regime for 48-bit VA */
 	sys_reg_write(MAIR_EL1, MMU_MAIR_VAL);
 	sys_reg_write(TCR_EL1, MMU_TCR_VAL);
-	sys_reg_write(TTBR0_EL1, (uint64_t)__early_idmap_pgd);
-	sys_reg_write(TTBR1_EL1, (uint64_t)__early_init_pgd);
+	sys_reg_write(TTBR0_EL1, (uintptr_t)__early_idmap_pgd);
+	sys_reg_write(TTBR1_EL1, (uintptr_t)__early_init_pgd);
 
 	/* Enable MMU, D-cache and I-cache */
 	sctlr = sys_reg_read(SCTLR_EL1);

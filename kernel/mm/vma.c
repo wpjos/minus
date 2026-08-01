@@ -32,7 +32,7 @@ void vma_free_all(struct mm_struct *mm)
  * vma_find_page - find the VMA containing @addr and return its backing page
  * plus the offset within that page.
  */
-struct page *vma_find_page(struct mm_struct *mm, uint64_t addr,
+struct page *vma_find_page(struct mm_struct *mm, uintptr_t addr,
 			   size_t *offset)
 {
 	struct dlist_node *node;

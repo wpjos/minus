@@ -43,7 +43,7 @@ void vma_init_mm(struct mm_struct *mm);
 void vma_free_all(struct mm_struct *mm);
 
 /* Look up the VMA containing @addr and return its backing page + offset. */
-struct page *vma_find_page(struct mm_struct *mm, uint64_t addr,
+struct page *vma_find_page(struct mm_struct *mm, uintptr_t addr,
 			   size_t *offset);
 
 #endif /* __VMA_H__ */

@@ -6,8 +6,8 @@
 #include "mmu.h"
 
 /* Cached MMIO bases */
-static uint64_t g_gicd_base;
-static uint64_t g_gicc_base;
+static uintptr_t g_gicd_base;
+static uintptr_t g_gicc_base;
 
 /* Number of SPIs supported by the distributor */
 static unsigned int g_nr_spis;
@@ -218,8 +218,8 @@ static int gic_probe(struct platform_device *pdev)
 		return -1;
 	}
 
-	g_gicd_base = (uint64_t)mmu_ioremap(res_d->start, resource_size(res_d));
-	g_gicc_base = (uint64_t)mmu_ioremap(res_c->start, resource_size(res_c));
+	g_gicd_base = (uintptr_t)mmu_ioremap(res_d->start, resource_size(res_d));
+	g_gicc_base = (uintptr_t)mmu_ioremap(res_c->start, resource_size(res_c));
 	if (!g_gicd_base || !g_gicc_base)
 		return -1;
 

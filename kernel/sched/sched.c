@@ -132,7 +132,7 @@ void schedule(void)
 	if (next->mm) {
 		if (next->mm != prev->mm)
 			mmu_switch_pgd(TTBR0_EL1,
-				       __VA_PA__((uint64_t)next->mm->pgd));
+				       __VA_PA__((uintptr_t)next->mm->pgd));
 	} else if (prev->mm) {
 		mmu_clear_ttbr0();
 	}
