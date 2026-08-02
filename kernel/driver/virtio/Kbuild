@@ -1,0 +1,3 @@
+obj-y := virtio_mmio.o virtio_blk.o
+
+include $(TOPDIR)/scripts/Kbuild.include

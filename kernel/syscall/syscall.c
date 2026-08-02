@@ -1,45 +1,8 @@
 #include "syscall.h"
 #include "task.h"
 #include "sched.h"
-#include "printk.h"
-#include "string.h"
-#include "page.h"
-#include "memory.h"
-#include "uaccess.h"
-
-#define SYS_WRITE_BUF_SIZE	128
-
-static long sys_write(unsigned int fd, const char *buf, size_t count)
-{
-	char kbuf[SYS_WRITE_BUF_SIZE];
-	size_t done = 0;
-
-	if (fd != 1)		/* only stdout supported for now */
-		return -1;
-
-	while (done < count) {
-		size_t chunk = count - done;
-		size_t copy;
-		long ret;
-
-		if (chunk > sizeof(kbuf) - 1)
-			chunk = sizeof(kbuf) - 1;
-
-		ret = copy_from_user(kbuf, buf + done, chunk);
-		copy = chunk - (size_t)ret;
-		if (copy == 0)
-			return -1;
-
-		kbuf[copy] = '\0';
-		printk("%s", kbuf);
-
-		done += copy;
-		if (ret != 0)
-			break;
-	}
-
-	return (long)done;
-}
+#include "errno.h"
+#include "fs_call.h"
 
 static long sys_exit(int code)
 {
@@ -76,27 +39,43 @@ static long sys_getpid(void)
 typedef long (*syscall_fn_t)(uint64_t, uint64_t, uint64_t, uint64_t,
 			     uint64_t, uint64_t);
 
-static syscall_fn_t sys_call_table[NR_SYSCALLS] = {
-	[SYS_WRITE] = (syscall_fn_t)sys_write,
-	[SYS_EXIT] = (syscall_fn_t)sys_exit,
-	[SYS_GETPID] = (syscall_fn_t)sys_getpid,
-	[SYS_YIELD] = (syscall_fn_t)sys_yield,
-	[SYS_EXECVE] = (syscall_fn_t)sys_execve,
+struct syscall_entry {
+	uint64_t	nr;
+	syscall_fn_t	fn;
 };
+
+static const struct syscall_entry sys_call_table[] = {
+	{ SYS_MKDIRAT,		(syscall_fn_t)sys_mkdirat },
+	{ SYS_UNLINKAT,		(syscall_fn_t)sys_unlinkat },
+	{ SYS_OPENAT,		(syscall_fn_t)sys_openat },
+	{ SYS_CLOSE,		(syscall_fn_t)sys_close },
+	{ SYS_LSEEK,		(syscall_fn_t)sys_lseek },
+	{ SYS_READ,		(syscall_fn_t)sys_read },
+	{ SYS_WRITE,		(syscall_fn_t)sys_write },
+	{ SYS_NEWFSTATAT,	(syscall_fn_t)sys_newfstatat },
+	{ SYS_FSTAT,		(syscall_fn_t)sys_fstat },
+	{ SYS_EXIT,		(syscall_fn_t)sys_exit },
+	{ SYS_YIELD,		(syscall_fn_t)sys_yield },
+	{ SYS_GETPID,		(syscall_fn_t)sys_getpid },
+	{ SYS_EXECVE,		(syscall_fn_t)sys_execve },
+};
+
+#define NR_SYSCALLS	(sizeof(sys_call_table) / sizeof(sys_call_table[0]))
 
 void do_syscall(struct pt_regs *regs)
 {
 	uint64_t nr = regs->x[8];
-	syscall_fn_t fn;
-	long ret;
+	size_t i;
 
-	if (nr >= NR_SYSCALLS) {
-		regs->x[0] = (uint64_t)-1;
-		return;
+	for (i = 0; i < NR_SYSCALLS; i++) {
+		if (sys_call_table[i].nr == nr) {
+			syscall_fn_t syscall_fn = sys_call_table[i].fn;
+			regs->x[0] = syscall_fn(regs->x[0], regs->x[1],
+						regs->x[2], regs->x[3],
+						regs->x[4], regs->x[5]);
+			return;
+		}
 	}
 
-	fn = sys_call_table[nr];
-	ret = fn(regs->x[0], regs->x[1], regs->x[2],
-		 regs->x[3], regs->x[4], regs->x[5]);
-	regs->x[0] = (uint64_t)ret;
+	regs->x[0] = (uint64_t)-ENOSYS;
 }

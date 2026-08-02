@@ -3,8 +3,10 @@
 
 #include "types.h"
 #include "sched.h"
-#include "vma.h"
 #include "pt_regs.h"
+
+struct files_struct;
+struct mm_struct;
 
 #define TASK_NAME_LEN	32
 
@@ -49,6 +51,7 @@ struct task_struct {
 	int pid;
 	char name[TASK_NAME_LEN];
 	struct mm_struct *mm;
+	struct files_struct *files;
 };
 
 void task_init(void);

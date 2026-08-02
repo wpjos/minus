@@ -6,6 +6,9 @@
 
 typedef unsigned long uintptr_t;
 typedef unsigned int size_t;
+typedef signed int ssize_t;
+typedef long long loff_t;
+typedef unsigned int dev_t;
 typedef unsigned char uchar;
 
 typedef unsigned long long __u64;

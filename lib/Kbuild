@@ -1,4 +1,4 @@
-obj-y := dlist.o rbtree.o string.o
+obj-y := dlist.o rbtree.o string.o bitops.o
 obj-y += libfdt/
 
 include $(TOPDIR)/scripts/Kbuild.include

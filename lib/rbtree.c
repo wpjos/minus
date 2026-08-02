@@ -141,14 +141,14 @@ void rb_insert(struct rb_tree *tree, struct rb_node *node)
 	struct rb_node *parent;
 	while (p != NULL) {
 		parent = p;
-		if (tree->comp(node, p)) { // node < p
+		if (tree->comp(node, p) < 0) { // node < p
 			p = p->left;
 		} else {
 			p = p->right;
 		}
 	}
 	node->parent = parent;
-	if (tree->comp(node, parent)) {
+	if (tree->comp(node, parent) < 0) {
 		parent->left = node;
 	} else {
 		parent->right = node;

@@ -15,4 +15,12 @@ long copy_from_user(void *to, const void *from, size_t n);
  */
 long copy_to_user(void *to, const void *from, size_t n);
 
+/*
+ * Copy a null-terminated string of at most @n bytes (including terminator)
+ * from userspace @src to kernel @dst. Returns the number of bytes copied
+ * (including the terminator) on success, or the number of uncopied bytes
+ * remaining on fault. A terminating NUL is always stored if @n > 0.
+ */
+long strncpy_from_user(char *dst, const char *src, size_t n);
+
 #endif /* __UACCESS_H__ */

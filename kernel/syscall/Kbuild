@@ -1,5 +1,5 @@
 obj-y := syscall.o
 
-ccflags-y := -I$(TOPDIR)/kernel/mm
+ccflags-y := -I$(TOPDIR)/kernel/mm -I$(TOPDIR)/include/syscall
 
 include $(TOPDIR)/scripts/Kbuild.include

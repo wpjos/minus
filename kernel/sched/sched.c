@@ -1,5 +1,6 @@
 #include "sched.h"
 #include "task.h"
+#include "vma.h"
 #include "mmu.h"
 #include "memory.h"
 #include "irqflags.h"

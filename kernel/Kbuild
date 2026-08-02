@@ -1,10 +1,11 @@
 obj-y := init.o printk.o task.o
+obj-y += boot/
 obj-y += mm/
 obj-y += arch/
 obj-y += driver/
 obj-y += sched/
 obj-y += syscall/
-
-ccflags-y := -I$(TOPDIR)/kernel/mm
+obj-y += block/
+obj-y += fs/
 
 include $(TOPDIR)/scripts/Kbuild.include

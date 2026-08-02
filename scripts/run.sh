@@ -18,6 +18,11 @@ OUTDIR=`pwd`/output
 KERNEL=${OUTDIR}/kernel.bin
 DTB=$OUTDIR/dtb/cortex-a72-virt.dtb
 
+if [ ! -f "rootfs.ext4" ]; then
+    dd if=/dev/zero of=rootfs.ext4 bs=1M count=256
+    mkfs.ext4 -F -O ^64bit,^has_journal rootfs.ext4
+fi
+
 # QEMU 核心参数（AArch64 virt 平台）
 QEMU_CMD="qemu-system-aarch64 \
     -M virt,gic-version=3 \
@@ -26,6 +31,7 @@ QEMU_CMD="qemu-system-aarch64 \
     -kernel ${KERNEL} \
     -dtb ${DTB} \
     -nographic \
+    -device virtio-blk-device,drive=hd0 -drive file=rootfs.ext4,format=raw,if=none,id=hd0 \
     ${DEBUG_FLAGS}"
 
 # ===================== 执行启动 =====================

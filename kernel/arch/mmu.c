@@ -97,19 +97,17 @@ void mmu_map(uint64_t *pgd, uintptr_t va, uint64_t pa, uint64_t size, uint64_t a
 
 /*
  * Runtime region mapping (called by drivers after paging_init).
- * Maps [phys, phys+size) as Device-nGnRnE in the kernel page table and
- * returns the kernel virtual address.
+ * Maps the page(s) covering [phys, phys+size) as Device-nGnRnE in the
+ * kernel page table and returns the kernel virtual address corresponding
+ * to @phys (the returned pointer may be non-page-aligned).
  */
 void *mmu_ioremap(uint64_t pa, uint64_t size)
 {
-	MMU_BUGON((pa & (PAGE_SIZE - 1)) != 0);
+	uintptr_t va = __PA_VA__(pa);
 
-	uintptr_t vstart = __PA_VA__(pa);
-	uintptr_t vend = ALIGN_UP(vstart + size, PAGE_SIZE);
+	mmu_map(__init_pgd, va, pa, size, MMU_REGION_DEVICE);
 
-	mmu_map_range(__init_pgd, vstart, vend, pa, PGD_LEVEL, MMU_REGION_DEVICE);
-
-	return (void *)vstart;
+	return (void *)(__PA_VA__(pa));
 }
 
 /*

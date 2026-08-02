@@ -1,0 +1,5 @@
+obj-y += sysif/
+obj-y += vfs/
+obj-y += ext4/
+
+include $(TOPDIR)/scripts/Kbuild.include

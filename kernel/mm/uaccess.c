@@ -69,3 +69,39 @@ long copy_to_user(void *to, const void *from, size_t n)
 
 	return 0;
 }
+
+long strncpy_from_user(char *dst, const char *src, size_t n)
+{
+	struct mm_struct *mm = current->mm;
+	uintptr_t addr = (uintptr_t)src;
+	size_t left = n;
+
+	if (!mm || n == 0)
+		return n;
+
+	while (left > 1) {
+		struct page *page;
+		size_t offset, chunk;
+		size_t i;
+
+		page = vma_find_page(mm, addr, &offset);
+		if (!page)
+			break;
+
+		chunk = PAGE_SIZE - offset;
+		if (chunk > left - 1)
+			chunk = left - 1;
+
+		for (i = 0; i < chunk; i++) {
+			char c = ((char *)page_to_virt(page))[offset + i];
+			*dst++ = c;
+			addr++;
+			left--;
+			if (c == '\0')
+				return 0;
+		}
+	}
+
+	*dst = '\0';
+	return left;
+}

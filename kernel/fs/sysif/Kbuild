@@ -1,0 +1,3 @@
+obj-y := fs_call.o
+
+include $(TOPDIR)/scripts/Kbuild.include

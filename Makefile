@@ -30,6 +30,9 @@ KBUILD_CPPFLAGS := -I $(TOPDIR)/include/base \
                    -I $(TOPDIR)/include/driver \
                    -I $(TOPDIR)/include/arch \
                    -I $(TOPDIR)/include/fdt \
+                   -I $(TOPDIR)/include/uapi \
+                   -I $(TOPDIR)/include/fs \
+                   -I $(TOPDIR)/include/syscall \
                    -I $(TOPDIR)/lib/libfdt \
 
 # 编译标志（AArch64 裸机必备）
