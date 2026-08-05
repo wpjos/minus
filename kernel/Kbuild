@@ -1,11 +1,12 @@
-obj-y := init.o printk.o task.o
+obj-y := init.o
 obj-y += boot/
 obj-y += mm/
 obj-y += arch/
 obj-y += driver/
 obj-y += sched/
 obj-y += syscall/
-obj-y += block/
 obj-y += fs/
+obj-y += klog/
+obj-y += proc/
 
 include $(TOPDIR)/scripts/Kbuild.include

@@ -1,5 +1,3 @@
-obj-y := vfs.o dcache.o inode.o mount.o namei.o fdtable.o buffer.o
-
-ccflags-y := -I$(TOPDIR)/kernel/mm -I$(TOPDIR)/kernel/fs/vfs
+obj-y := vfs.o dcache.o inode.o mount.o namei.o fdtable.o
 
 include $(TOPDIR)/scripts/Kbuild.include

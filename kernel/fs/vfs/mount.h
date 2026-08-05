@@ -12,7 +12,7 @@ struct vfsmount {
 	struct dlist_node mnt_list;
 };
 
-struct vfsmount *kern_mount(struct file_system_type *fs, dev_t dev);
+struct vfsmount *kern_mount(struct file_system_type *fs, const char *dev_name);
 
 void vfs_mount_init(void);
 

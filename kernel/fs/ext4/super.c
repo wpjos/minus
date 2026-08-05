@@ -5,7 +5,6 @@
 #include "module.h"
 #include "errno.h"
 #include "bitops.h"
-#include "../vfs/buffer.h"
 
 struct kmem_cache *g_ext4_inode_cache;
 
@@ -183,14 +182,14 @@ static struct super_operations ext4_sops = {
 };
 
 static struct super_block *ext4_mount(struct file_system_type *fs,
-				      dev_t dev, const char *data)
+				      const char *dev_name, const char *data)
 {
 	struct super_block *sb;
 	struct block_device *bdev;
 
 	(void)data;
 
-	bdev = bdev_get_by_dev(dev);
+	bdev = bdev_get_by_name(dev_name);
 	if (!bdev)
 		return NULL;
 
@@ -200,7 +199,7 @@ static struct super_block *ext4_mount(struct file_system_type *fs,
 		return NULL;
 	}
 	sb->s_bdev = bdev;
-	sb->s_dev = dev;
+	sb->s_dev = bdev->bd_dev;
 	sb->s_op = &ext4_sops;
 
 	if (ext4_fill_super(sb) < 0) {

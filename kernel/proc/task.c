@@ -1,9 +1,7 @@
 #include "task.h"
 #include "sched.h"
 #include "mm.h"
-#include "mm/vma.h"
-#include "mm/page.h"
-#include "mm/buddy.h"
+#include "vma.h"
 #include "pt_regs.h"
 #include "mmu.h"
 #include "printk.h"
@@ -33,13 +31,11 @@ struct task_struct *task_alloc(const char *name)
 		return NULL;
 	memset(task, 0, sizeof(*task));
 
-	task->mm = kmalloc(sizeof(*task->mm));
+	task->mm = vma_alloc_init();
 	if (!task->mm) {
 		kfree(task);
 		return NULL;
 	}
-	memset(task->mm, 0, sizeof(*task->mm));
-	dlist_init(&task->mm->vma_list);
 
 	task->files = alloc_files_struct();
 	if (!task->files) {
@@ -52,7 +48,6 @@ struct task_struct *task_alloc(const char *name)
 	strncpy(task->name, name, sizeof(task->name) - 1);
 	task->state = TASK_RUNNING;
 	dlist_init(&task->se.run_node);
-	vma_init_mm(task->mm);
 
 	return task;
 }
@@ -61,11 +56,6 @@ static void free_task_pages(struct task_struct *task)
 {
 	if (task->mm) {
 		vma_free_all(task->mm);
-
-		if (task->mm->pgd)
-			kfree_pages(task->mm->pgd);
-		if (task->mm->kstack_top)
-			buddy_free_pages(virt_to_page(task->mm->kstack_top - PAGE_SIZE));
 		kfree(task->mm);
 	}
 	kfree(task);

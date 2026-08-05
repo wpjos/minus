@@ -1,12 +1,16 @@
 # scripts/Kbuild.include（所有「怎么做」的逻辑，Kbuild 仅声明）
 # ===================== 实现：编译规则 =====================
+# ccflags-y: flags for the current directory
+# subdir-ccflags-y: flags that propagate to all subdirectories
+ALL_CCFLAGS := $(ccflags-y) $(subdir-ccflags-y)
+
 # 1. 汇编文件编译（.S → .o）
 $(OBJDIR)/%.o: %.S
-	$(CC) $(CFLAGS) $(ccflags-y) -c $< -o $@
+	$(CC) $(CFLAGS) $(ALL_CCFLAGS) -c $< -o $@
 
 # 2. C 文件编译（.c → .o）
 $(OBJDIR)/%.o: %.c
-	$(CC) $(CFLAGS) $(ccflags-y) -c $< -o $@
+	$(CC) $(CFLAGS) $(ALL_CCFLAGS) -c $< -o $@
 
 # 声明子目录产物路径（仅定义路径，实现逻辑在 include 文件）
 subdir-y := $(patsubst %/,%,$(filter %/, $(obj-y)))
@@ -33,13 +37,13 @@ $(OUTPUT)/.tmp/%/built-in.o:
 	@mkdir -p $(dir $@)
 	@if [ -f $(CURDIR)/$*/Kbuild ]; then \
 		$(MAKE) -C $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@) \
-		        -f $(CURDIR)/$*/Kbuild \
-		        CC=$(CC) CFLAGS="$(CFLAGS)" \
-		        OBJDIR=$(OUTPUT)/.tmp/$* TOPDIR=$(TOPDIR); \
+			-f $(CURDIR)/$*/Kbuild \
+			CC=$(CC) CFLAGS="$(CFLAGS) $(ALL_CCFLAGS)" \
+			OBJDIR=$(OUTPUT)/.tmp/$* TOPDIR=$(TOPDIR); \
 	else \
 		$(MAKE) -C $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@) \
-		        -f $(TOPDIR)/scripts/Kbuild.default \
-		        CC=$(CC) CFLAGS="$(CFLAGS)" \
-		        OBJDIR=$(OUTPUT)/.tmp/$* TOPDIR=$(TOPDIR); \
+			-f $(TOPDIR)/scripts/Kbuild.default \
+			CC=$(CC) CFLAGS="$(CFLAGS) $(ALL_CCFLAGS)" \
+			OBJDIR=$(OUTPUT)/.tmp/$* TOPDIR=$(TOPDIR); \
 	fi
 	@mv $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@)/built-in.o $@

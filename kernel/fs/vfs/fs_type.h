@@ -7,7 +7,7 @@
 struct file_system_type {
 	const char *name;
 	struct file_system_type *next;
-	struct super_block *(*mount)(struct file_system_type *, dev_t dev,
+	struct super_block *(*mount)(struct file_system_type *, const char *dev_name,
 				     const char *data);
 	void (*kill_sb)(struct super_block *);
 };

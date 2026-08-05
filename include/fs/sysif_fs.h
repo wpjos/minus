@@ -1,5 +1,5 @@
-#ifndef __FS_CALL_H__
-#define __FS_CALL_H__
+#ifndef __SYSIF_FS__
+#define __SYSIF_FS__
 
 #include "types.h"
 #include "stat.h"

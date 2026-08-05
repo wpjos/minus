@@ -5,19 +5,18 @@
 #include "string.h"
 #include "mm.h"
 #include "errno.h"
-#include "blkdev.h"
 
 static struct dlist_node g_mounts;
 
 struct dentry *root_dentry = NULL;
 struct vfsmount *root_mnt = NULL;
 
-struct vfsmount *kern_mount(struct file_system_type *fs, dev_t dev)
+struct vfsmount *kern_mount(struct file_system_type *fs, const char *dev_name)
 {
 	struct super_block *sb;
 	struct vfsmount *mnt;
 
-	sb = fs->mount(fs, dev, NULL);
+	sb = fs->mount(fs, dev_name, NULL);
 	if (!sb)
 		return NULL;
 
@@ -41,28 +40,15 @@ int vfs_do_mount(const char *dev_name, const char *fs_name,
 		 const char *dir_name)
 {
 	struct file_system_type *fs;
-	struct block_device *bdev;
 	struct vfsmount *mnt;
-	dev_t dev;
-
-	if (strcmp(dev_name, "/dev/vda") == 0)
-		dev = MKDEV(VIRTBLK_MAJOR, 0);
-	else
-		return -EINVAL;
-
-	bdev = bdev_get_by_dev(dev);
-	if (!bdev)
-		return -EIO;
 
 	fs = get_fs_type(fs_name);
 	if (!fs) {
-		bdev_put(bdev);
 		return -ENODEV;
 	}
 
-	mnt = kern_mount(fs, dev);
+	mnt = kern_mount(fs, dev_name);
 	if (!mnt) {
-		bdev_put(bdev);
 		return -EIO;
 	}
 

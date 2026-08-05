@@ -37,7 +37,7 @@ struct mm_struct {
 };
 
 /* Initialize the VMA subsystem for a freshly allocated mm_struct. */
-void vma_init_mm(struct mm_struct *mm);
+struct mm_struct *vma_alloc_init(void);
 
 /* Free all VMAs (and their backing pages) attached to @mm. */
 void vma_free_all(struct mm_struct *mm);

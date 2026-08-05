@@ -1,6 +1,5 @@
 #include "blkdev.h"
 #include "string.h"
-#include "printk.h"
 #include "mm.h"
 #include "module.h"
 
@@ -74,6 +73,15 @@ int add_block_device(struct block_device *bdev)
 	}
 
 	return 0;
+}
+
+struct block_device *bdev_get_by_name(const char *dev_name)
+{
+	dev_t dev = -1;
+	if (strcmp(dev_name, "/dev/vda") == 0) {
+		dev = MKDEV(VIRTBLK_MAJOR, 0);
+	}
+	return bdev_get_by_dev(dev);
 }
 
 struct block_device *bdev_get_by_dev(dev_t dev)

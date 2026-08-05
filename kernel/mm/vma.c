@@ -4,9 +4,14 @@
 #include "mm.h"
 #include "string.h"
 
-void vma_init_mm(struct mm_struct *mm)
+struct mm_struct *vma_alloc_init(void)
 {
-	dlist_init(&mm->vma_list);
+	struct mm_struct *mm = kmalloc(sizeof(struct mm_struct));
+	if (mm != NULL) {
+		memset(mm, 0, sizeof(*mm));
+		dlist_init(&mm->vma_list);
+	}
+	return mm;
 }
 
 void vma_free_all(struct mm_struct *mm)
@@ -25,6 +30,13 @@ void vma_free_all(struct mm_struct *mm)
 			buddy_free_pages(vma->page);
 		kfree(vma);
 		node = next;
+	}
+
+	if (mm->pgd) {
+		kfree_pages(mm->pgd);
+	}
+	if (mm->kstack_top) {
+		kfree_pages((void *)(mm->kstack_top - PAGE_SIZE));
 	}
 }
 

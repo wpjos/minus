@@ -3,7 +3,6 @@
 #include "mm.h"
 #include "errno.h"
 #include "stat.h"
-#include "../vfs/buffer.h"
 #include "bitops.h"
 
 static struct ext4_dir_entry_2 *ext4_next_entry(struct ext4_dir_entry_2 *de)

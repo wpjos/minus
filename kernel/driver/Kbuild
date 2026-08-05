@@ -2,6 +2,7 @@ obj-y += core/
 obj-y += gic/
 obj-y += timer/
 obj-y += virtio/
-obj-y += uart.o
+obj-y += block/
+obj-y += console/
 
 include $(TOPDIR)/scripts/Kbuild.include

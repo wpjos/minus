@@ -47,6 +47,7 @@ int unregister_blkdev(unsigned int major);
 int add_block_device(struct block_device *bdev);
 
 struct block_device *bdev_get_by_dev(dev_t dev);
+struct block_device *bdev_get_by_name(const char *dev_name);
 void bdev_put(struct block_device *bdev);
 
 int bdev_read_blocks(struct block_device *bdev, uint64_t lba,

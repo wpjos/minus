@@ -1,5 +1,18 @@
-#ifndef __BUFFER_H__
-#define __BUFFER_H__
+#ifndef __FSBLOCK_BUFFER_H__
+#define __FSBLOCK_BUFFER_H__
+
+/*
+ * Buffer cache - bridge between filesystems and block devices.
+ *
+ * Architecture:
+ *   Filesystems (ext4, ...)
+ *       |  bread(), sb_bread(), brelse(), mark_buffer_dirty()
+ *       v
+ *   Buffer Cache (here)  -- caches block I/O, tracks dirty state
+ *       |
+ *       v  bdev_read_blocks(), bdev_write_blocks()
+ *   Block Devices (kernel/driver/block/)
+ */
 
 #include "types.h"
 #include "dlist.h"
@@ -27,4 +40,4 @@ int sync_dirty_buffers(struct block_device *bdev);
 
 void buffer_cache_init(void);
 
-#endif /* __BUFFER_H__ */
+#endif /* __FSBLOCK_BUFFER_H__ */

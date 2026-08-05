@@ -21,8 +21,8 @@ OUTPUT        := $(TOPDIR)/output
 TARGET        := $(OUTPUT)/kernel.elf
 BIN_TARGET    := $(OUTPUT)/kernel.bin
 DTB_DIR       := $(OUTPUT)/dtb
-DTB_SRCS      := $(wildcard $(TOPDIR)/dts/*.dts)
-DTBS          := $(patsubst $(TOPDIR)/dts/%.dts,$(DTB_DIR)/%.dtb,$(DTB_SRCS))
+DTB_SRCS      := $(wildcard $(TOPDIR)/arch/dts/*.dts)
+DTBS          := $(patsubst $(TOPDIR)/arch/dts/%.dts,$(DTB_DIR)/%.dtb,$(DTB_SRCS))
 
 # 公共头文件搜索路径（C/汇编/链接脚本预处理共用）
 KBUILD_CPPFLAGS := -I $(TOPDIR)/include/base \
@@ -32,6 +32,7 @@ KBUILD_CPPFLAGS := -I $(TOPDIR)/include/base \
                    -I $(TOPDIR)/include/fdt \
                    -I $(TOPDIR)/include/uapi \
                    -I $(TOPDIR)/include/fs \
+                   -I $(TOPDIR)/include/mm \
                    -I $(TOPDIR)/include/syscall \
                    -I $(TOPDIR)/lib/libfdt \
 
@@ -53,7 +54,7 @@ KBUILD_LDFLAGS := -m aarch64elf \
 
 # Kconfig / autoconf 生成工具
 KCONFIG_PY    := $(TOPDIR)/scripts/kconfig.py
-DEFCONFIG     := $(TOPDIR)/configs/$(PLAT)_defconfig
+DEFCONFIG     := $(TOPDIR)/arch/configs/$(PLAT)_defconfig
 AUTOCONF_H    := $(TOPDIR)/include/generated/autoconf.h
 
 # ===================== Kconfig 目标 =====================
@@ -103,7 +104,7 @@ dtbs: $(DTBS)
 	@echo "\033[32m[Minus] DTB files generated:\033[0m"
 	@for dtb in $(DTBS); do echo "\033[32m  $$dtb\033[0m"; done
 
-$(DTB_DIR)/%.dtb: $(TOPDIR)/dts/%.dts
+$(DTB_DIR)/%.dtb: $(TOPDIR)/arch/dts/%.dts
 	@mkdir -p $(DTB_DIR)
 	@echo "\033[33m[Minus] Generating DTB: $@\033[0m"
 	dtc -I dts -O dtb -o $@ $<

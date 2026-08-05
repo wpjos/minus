@@ -2,8 +2,6 @@
 #include "super.h"
 #include "mm.h"
 #include "string.h"
-#include "page.h"
-#include "buddy.h"
 #include "bitops.h"
 
 static struct rb_tree g_bcache_tree;
@@ -55,14 +53,14 @@ static struct buffer_head *alloc_buffer(struct block_device *bdev,
 					uint64_t block, uint32_t size)
 {
 	struct buffer_head *bh;
-	struct page *page;
+	void *b_data;
 
 	bh = (struct buffer_head *)kmalloc(sizeof(*bh));
 	if (!bh)
 		return NULL;
 
-	page = buddy_alloc_pages(size);
-	if (!page) {
+	b_data = kzalloc_pages(size);
+	if (!b_data) {
 		kfree(bh);
 		return NULL;
 	}
@@ -71,7 +69,7 @@ static struct buffer_head *alloc_buffer(struct block_device *bdev,
 	bh->b_blocknr = block;
 	bh->b_size = size;
 	bh->b_ref_count = 1;
-	bh->b_data = page_to_virt(page);
+	bh->b_data = b_data;
 	bh->b_bdev = bdev;
 	bh->b_dirty = 0;
 	dlist_init(&bh->b_lru);
@@ -81,14 +79,11 @@ static struct buffer_head *alloc_buffer(struct block_device *bdev,
 
 static void free_buffer(struct buffer_head *bh)
 {
-	struct page *page;
-
 	if (!bh)
 		return;
 
 	if (bh->b_data) {
-		page = virt_to_page(bh->b_data);
-		buddy_free_pages(page);
+		kfree_pages(bh->b_data);
 	}
 	kfree(bh);
 }

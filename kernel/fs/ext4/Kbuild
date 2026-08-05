@@ -1,5 +1,3 @@
 obj-y := super.o inode.o extent.o dir.o file.o namei.o
 
-ccflags-y := -I$(TOPDIR)/kernel/mm -I$(TOPDIR)/kernel/fs/vfs
-
 include $(TOPDIR)/scripts/Kbuild.include

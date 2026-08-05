@@ -1,6 +1,8 @@
 #ifndef __SYSCALL_H__
 #define __SYSCALL_H__
 
+#include "sysif_fs.h"
+
 #include "pt_regs.h"
 
 /* ARM64 syscall numbers for the implemented syscalls. */
