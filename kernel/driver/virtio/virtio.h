@@ -110,12 +110,38 @@ struct virtqueue {
 };
 
 struct virtio_device {
+	struct device dev;
 	uintptr_t base;
 	uint32_t device_id;
 	uint32_t irq;
 	struct virtqueue vq;
 	struct platform_device *pdev;
 };
+
+/*
+ * Virtio device ID match table entry.
+ */
+struct virtio_device_id {
+	uint32_t device_id;
+	const void *data;
+};
+
+/*
+ * Virtio driver - binds to devices by device_id.
+ */
+struct virtio_driver {
+	struct driver drv;
+	const struct virtio_device_id *id_table;
+	int (*probe)(struct virtio_device *vdev);
+	int (*remove)(struct virtio_device *vdev);
+};
+
+#define virtio_driver_of(d) container_of(d, struct virtio_driver, drv)
+#define virtio_device_of(d) container_of(d, struct virtio_device, dev)
+
+/* API */
+int virtio_driver_register(struct virtio_driver *drv);
+int virtio_device_register(struct virtio_device *vdev);
 
 struct virtio_blk_outhdr {
 	uint32_t type;

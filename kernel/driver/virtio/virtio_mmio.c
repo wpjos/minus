@@ -7,13 +7,6 @@
 #include "module.h"
 #include "memory.h"
 
-static struct virtio_device *g_vblk_vdev;
-
-struct virtio_device *virtio_get_block_device(void)
-{
-	return g_vblk_vdev;
-}
-
 static uint32_t vring_size(uint32_t num, uint32_t align)
 {
 	uint32_t desc_size = num * sizeof(struct vring_desc);
@@ -197,8 +190,8 @@ int virtio_mmio_probe(struct platform_device *pdev)
 	if (magic != VIRTIO_MAGIC || version != VIRTIO_VERSION_LEGACY)
 		return -1;
 
-	if (device_id != VIRTIO_ID_BLOCK)
-		return 0; /* only block device supported for now */
+	if (device_id == 0)
+		return 0; /* no device */
 
 	vdev = (struct virtio_device *)kmalloc(sizeof(*vdev));
 	if (!vdev)
@@ -234,7 +227,8 @@ int virtio_mmio_probe(struct platform_device *pdev)
 	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_DRIVER_OK);
 	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_STARTED);
 
-	g_vblk_vdev = vdev;
+	virtio_device_register(vdev);
+
 	return 0;
 }
 

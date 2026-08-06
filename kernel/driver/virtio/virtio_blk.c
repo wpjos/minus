@@ -20,8 +20,6 @@ struct virtio_blk_req {
 	int done;
 };
 
-extern struct virtio_device *virtio_get_block_device(void);
-
 static int virtio_blk_request(struct block_device *bdev, uint64_t lba,
 			      size_t nr_blocks, void *buf, int dir)
 {
@@ -88,14 +86,17 @@ static struct block_device_operations virtio_blk_ops = {
 	.request = virtio_blk_request,
 };
 
+static const struct virtio_device_id virtio_blk_id_table[] = {
+	{ .device_id = VIRTIO_ID_BLOCK },
+	{ /* sentinel */ }
+};
+
 static int virtio_blk_probe(struct virtio_device *vdev)
 {
 	struct virtio_blk *vblk;
 	struct virtio_blk_config *cfg;
-	uint64_t capacity;
 
 	cfg = (struct virtio_blk_config *)(vdev->base + VIRTIO_MMIO_CONFIG_BASE);
-	capacity = (uint64_t)cfg->capacity;
 
 	vblk = (struct virtio_blk *)kmalloc(sizeof(*vblk));
 	if (!vblk)
@@ -103,7 +104,7 @@ static int virtio_blk_probe(struct virtio_device *vdev)
 	memset(vblk, 0, sizeof(*vblk));
 
 	vblk->vdev = vdev;
-	vblk->capacity = capacity;
+	vblk->capacity = (uint64_t)cfg->capacity;
 	vblk->block_size = 512;
 
 	vblk->bdev.bd_dev = MKDEV(VIRTBLK_MAJOR, 0);
@@ -125,11 +126,14 @@ static int virtio_blk_probe(struct virtio_device *vdev)
 	return 0;
 }
 
+static struct virtio_driver virtio_blk_driver = {
+	.id_table = virtio_blk_id_table,
+	.probe    = virtio_blk_probe,
+};
+
 static void virtio_blk_init(void)
 {
-	struct virtio_device *vdev = virtio_get_block_device();
-
-	if (vdev)
-		virtio_blk_probe(vdev);
+	virtio_driver_register(&virtio_blk_driver);
 }
+
 module_register(virtio_blk, MODULE_LEVEL_LOW, virtio_blk_init);
