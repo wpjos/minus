@@ -58,6 +58,8 @@ static void free_task_pages(struct task_struct *task)
 		vma_free_all(task->mm);
 		kfree(task->mm);
 	}
+	if (task->files)
+		kfree(task->files);
 	kfree(task);
 }
 

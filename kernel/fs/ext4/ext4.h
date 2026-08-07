@@ -259,9 +259,9 @@ int ext4_write_inode(struct inode *inode);
 int ext4_alloc_inode(struct super_block *sb, struct inode *inode);
 
 /* extent.c */
-int ext4_get_block(struct inode *inode, uint32_t iblock, uint32_t *pblock);
-int ext4_new_block(struct inode *inode, uint32_t *pblock);
-int ext4_set_block(struct inode *inode, uint32_t iblock, uint32_t pblock);
+int ext4_get_block(struct inode *inode, uint32_t iblock, uint64_t *pblock);
+int ext4_new_block(struct inode *inode, uint64_t *pblock);
+int ext4_set_block(struct inode *inode, uint32_t iblock, uint64_t pblock);
 int ext4_truncate_blocks(struct inode *inode);
 
 /* dir.c */
@@ -271,6 +271,7 @@ int ext4_add_entry(struct inode *dir, const char *name, int len,
 int ext4_delete_entry(struct inode *dir, const char *name, int len);
 int ext4_make_empty(struct inode *inode, struct inode *parent);
 int ext4_dir_is_empty(struct inode *inode);
+long ext4_iterate(struct file *filp, struct dir_context *ctx);
 
 /* file.c (operations tables only; read/write are static) */
 

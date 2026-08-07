@@ -252,6 +252,20 @@ loff_t vfs_llseek(struct file *file, loff_t offset, int whence)
 	return newpos;
 }
 
+long vfs_readdir(struct file *file, struct dir_context *ctx)
+{
+	long ret;
+
+	if (!file || !file->f_op || !file->f_op->iterate)
+		return -EINVAL;
+
+	ctx->pos = file->f_pos;
+	ret = file->f_op->iterate(file, ctx);
+	if (ret == 0)
+		file->f_pos = ctx->pos;
+	return ret;
+}
+
 static void vfs_fill_stat(struct inode *inode, struct stat *st)
 {
 	memset(st, 0, sizeof(*st));

@@ -7,6 +7,9 @@
 #include "stat.h"
 #include "fcntl.h"
 #include "printk.h"
+#include "dirent.h"
+#include "uart.h"
+#include "file.h"
 
 #define PATH_LEN 256
 
@@ -67,8 +70,19 @@ long sys_read(unsigned int fd, char *buf, size_t count)
 	size_t done = 0;
 
 	file = fget(current->files, fd);
-	if (!file)
+	if (!file) {
+		/* fd 0 UART fallback until a real stdin device is wired. */
+		if (fd == 0) {
+			while (done < count) {
+				char c = uart_getc();
+				if (copy_to_user(buf + done, &c, 1) != 0)
+					return done ? (long)done : -EFAULT;
+				done++;
+			}
+			return (long)done;
+		}
 		return -EBADF;
+	}
 
 	while (done < count) {
 		size_t chunk = count - done;
@@ -102,34 +116,34 @@ long sys_write(unsigned int fd, const char *buf, size_t count)
 	char kbuf[256];
 	size_t done = 0;
 
-	/* fd 1 is a temporary console hook until a real stdout device is wired. */
-	if (fd == 1) {
-		while (done < count) {
-			size_t chunk = count - done;
-			long ret;
-			size_t copy;
-
-			if (chunk > sizeof(kbuf) - 1)
-				chunk = sizeof(kbuf) - 1;
-
-			ret = copy_from_user(kbuf, buf + done, chunk);
-			copy = chunk - (size_t)ret;
-			if (copy == 0)
-				return done ? (long)done : -EFAULT;
-
-			kbuf[copy] = '\0';
-			printk("%s", kbuf);
-
-			done += copy;
-			if (ret != 0)
-				break;
-		}
-		return (long)done;
-	}
-
 	file = fget(current->files, fd);
-	if (!file)
+	if (!file) {
+		/* fd 1 printk fallback until a real stdout device is wired. */
+		if (fd == 1) {
+			while (done < count) {
+				size_t chunk = count - done;
+				long ret;
+				size_t copy;
+
+				if (chunk > sizeof(kbuf) - 1)
+					chunk = sizeof(kbuf) - 1;
+
+				ret = copy_from_user(kbuf, buf + done, chunk);
+				copy = chunk - (size_t)ret;
+				if (copy == 0)
+					return done ? (long)done : -EFAULT;
+
+				kbuf[copy] = '\0';
+				printk("%s", kbuf);
+
+				done += copy;
+				if (ret != 0)
+					break;
+			}
+			return (long)done;
+		}
 		return -EBADF;
+	}
 
 	while (done < count) {
 		size_t chunk = count - done;
@@ -233,4 +247,59 @@ long sys_mkdirat(int dirfd, const char *pathname, uint16_t mode)
 		return ret;
 
 	return vfs_mkdir(path, mode);
+}
+
+struct getdents_ctx {
+	struct dir_context ctx;
+	char *buf;
+	size_t count;
+	size_t pos;
+};
+
+static long filldir(struct dir_context *ctx, const char *name, int namlen,
+		    loff_t off, uint64_t ino, unsigned int d_type)
+{
+	struct getdents_ctx *g = container_of(ctx, struct getdents_ctx, ctx);
+	struct dirent64_s de;
+	size_t reclen;
+
+	reclen = sizeof(struct dirent64_s) + namlen + 1;
+	reclen = (reclen + 7) & ~7;
+
+	if (g->pos + reclen > g->count)
+		return 1;
+
+	memset(&de, 0, sizeof(de));
+	de.d_ino = ino;
+	de.d_off = off;
+	de.d_reclen = reclen;
+	de.d_type = d_type;
+
+	if (copy_to_user(g->buf + g->pos, &de, sizeof(de)) != 0)
+		return -EFAULT;
+	if (copy_to_user(g->buf + g->pos + sizeof(de), name, namlen + 1) != 0)
+		return -EFAULT;
+
+	g->pos += reclen;
+	return 0;
+}
+
+long sys_getdents64(unsigned int fd, char *buf, unsigned int count)
+{
+	struct file *file;
+	struct getdents_ctx ctx;
+	long ret;
+
+	file = fget(current->files, fd);
+	if (!file)
+		return -EBADF;
+
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.ctx.actor = filldir;
+	ctx.buf = buf;
+	ctx.count = count;
+	ctx.pos = 0;
+
+	ret = vfs_readdir(file, &ctx.ctx);
+	return ret == 0 ? (long)ctx.pos : ret;
 }

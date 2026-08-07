@@ -5,7 +5,7 @@
 #include "buffer.h"
 #include "bitops.h"
 
-int ext4_get_block(struct inode *inode, uint32_t iblock, uint32_t *pblock)
+int ext4_get_block(struct inode *inode, uint32_t iblock, uint64_t *pblock)
 {
 	struct ext4_inode_info *ei = inode->i_private;
 	struct ext4_extent_header *eh;
@@ -29,7 +29,7 @@ int ext4_get_block(struct inode *inode, uint32_t iblock, uint32_t *pblock)
 	for (i = 0; i < n; i++) {
 		uint32_t start = le32_to_cpu(ex[i].ee_block);
 		uint32_t len = le16_to_cpu(ex[i].ee_len);
-		uint32_t phys = ((uint32_t)le16_to_cpu(ex[i].ee_start_hi) << 16) |
+		uint64_t phys = ((uint64_t)le16_to_cpu(ex[i].ee_start_hi) << 32) |
 			      le32_to_cpu(ex[i].ee_start_lo);
 
 		if (iblock >= start && iblock < start + len) {
@@ -58,7 +58,7 @@ static struct buffer_head *ext4_read_bitmap(struct super_block *sb,
 	return sb_bread(sb, block);
 }
 
-static int ext4_find_free_block(struct super_block *sb, uint32_t *pblock)
+static int ext4_find_free_block(struct super_block *sb, uint64_t *pblock)
 {
 	struct ext4_sb_info *sbi = sb->s_fs_info;
 	uint32_t group;
@@ -78,7 +78,7 @@ static int ext4_find_free_block(struct super_block *sb, uint32_t *pblock)
 			set_bit(idx, bitmap);
 			mark_buffer_dirty(bh);
 			brelse(bh);
-			*pblock = group * sbi->s_blocks_per_group +
+			*pblock = (uint64_t)group * sbi->s_blocks_per_group +
 				 idx + sbi->s_first_data_block;
 			return 0;
 		}
@@ -87,12 +87,12 @@ static int ext4_find_free_block(struct super_block *sb, uint32_t *pblock)
 	return -ENOSPC;
 }
 
-int ext4_new_block(struct inode *inode, uint32_t *pblock)
+int ext4_new_block(struct inode *inode, uint64_t *pblock)
 {
 	return ext4_find_free_block(inode->i_sb, pblock);
 }
 
-int ext4_set_block(struct inode *inode, uint32_t iblock, uint32_t pblock)
+int ext4_set_block(struct inode *inode, uint32_t iblock, uint64_t pblock)
 {
 	struct ext4_inode_info *ei = inode->i_private;
 	struct ext4_extent_header *eh;
@@ -121,7 +121,7 @@ int ext4_set_block(struct inode *inode, uint32_t iblock, uint32_t pblock)
 		struct ext4_extent *last = &ex[n - 1];
 		uint32_t last_start = le32_to_cpu(last->ee_block);
 		uint32_t last_len = le16_to_cpu(last->ee_len);
-		uint32_t last_phys = ((uint32_t)le16_to_cpu(last->ee_start_hi) << 16) |
+		uint64_t last_phys = ((uint64_t)le16_to_cpu(last->ee_start_hi) << 32) |
 				     le32_to_cpu(last->ee_start_lo);
 
 		if (iblock == last_start + last_len &&

@@ -6,6 +6,7 @@
 #include "pt_regs.h"
 
 /* ARM64 syscall numbers for the implemented syscalls. */
+#define SYS_GETDENTS64	61
 #define SYS_MKDIRAT	34
 #define SYS_UNLINKAT	35
 #define SYS_OPENAT	56

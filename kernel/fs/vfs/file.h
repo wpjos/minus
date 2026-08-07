@@ -16,6 +16,13 @@ struct files_struct {
 	int count;
 };
 
+/* Directory iteration context. */
+struct dir_context {
+	long (*actor)(struct dir_context *ctx, const char *name, int namlen,
+		      loff_t pos, uint64_t ino, unsigned int d_type);
+	loff_t pos;
+};
+
 /* In-memory file handle. */
 struct file {
 	struct dentry			*f_dentry;
@@ -34,6 +41,7 @@ struct file_operations {
 	ssize_t (*read)(struct file *, char *buf, size_t len, loff_t *pos);
 	ssize_t (*write)(struct file *, const char *buf, size_t len, loff_t *pos);
 	loff_t  (*llseek)(struct file *, loff_t offset, int whence);
+	long    (*iterate)(struct file *, struct dir_context *);
 };
 
 /* VFS file helpers (public declarations are in include/fs/vfs.h). */

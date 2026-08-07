@@ -8,6 +8,7 @@
 #include "boot/cmdline.h"
 #include "string.h"
 #include "fcntl.h"
+#include "loader.h"
 
 const char logo[] = "hello minus!!!\n";
 
@@ -64,6 +65,8 @@ int start_kernel(void)
 		if (vfs_unlink("/vfstest.txt") == 0)
 			printk("vfs unlink test passed\n");
 	}
+
+	run_user_init("/bin/shell");
 
 	irq_unmask();
 

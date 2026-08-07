@@ -10,6 +10,9 @@
 #define UART_FR(base)	(*(volatile uint32_t *)((base) + 0x18))
 #define UART_CR(base)	(*(volatile uint32_t *)((base) + 0x30))
 
+#define UART_FR_RXFE	(1 << 4)
+#define UART_FR_TXFF	(1 << 5)
+
 /* Cached base address, set during probe */
 static uintptr_t g_uart_base = CONFIG_EARLY_UART;
 
@@ -26,6 +29,22 @@ void uart_puts(const char *str)
 {
 	while (*str)
 		uart_putc(*str++);
+}
+
+int uart_rx_ready(void)
+{
+	if (!g_uart_base)
+		return 0;
+	return !(UART_FR(g_uart_base) & UART_FR_RXFE);
+}
+
+char uart_getc(void)
+{
+	if (!g_uart_base)
+		return '\0';
+	while (!uart_rx_ready())
+		;
+	return (char)UART_DR(g_uart_base);
 }
 
 static int uart_probe(struct platform_device *pdev)

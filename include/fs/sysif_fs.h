@@ -14,5 +14,6 @@ long sys_newfstatat(int dirfd, const char *pathname, struct stat *statbuf,
 long sys_fstat(unsigned int fd, struct stat *statbuf);
 long sys_unlinkat(int dirfd, const char *pathname, int flags);
 long sys_mkdirat(int dirfd, const char *pathname, uint16_t mode);
+long sys_getdents64(unsigned int fd, char *buf, unsigned int count);
 
 #endif /* __FS_CALL_H__ */

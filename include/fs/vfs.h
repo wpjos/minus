@@ -16,6 +16,7 @@
 
 struct files_struct;
 struct file;
+struct dir_context;
 
 /* Subsystem init. */
 void vfs_init(void);
@@ -38,6 +39,7 @@ void vfs_close(struct file *filp);
 ssize_t vfs_read(struct file *filp, char *buf, size_t len, loff_t *pos);
 ssize_t vfs_write(struct file *filp, const char *buf, size_t len, loff_t *pos);
 loff_t vfs_llseek(struct file *filp, loff_t offset, int whence);
+long vfs_readdir(struct file *filp, struct dir_context *ctx);
 
 /* Path/name/stat operations. */
 int vfs_stat(const char *pathname, struct stat *st);

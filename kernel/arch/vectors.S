@@ -1,3 +1,10 @@
+#include "entry-common.h"
+
+.section ".text", "ax"
+.global ret_to_user
+ret_to_user:
+	restore_all
+
 .section ".vector.init", "ax"
 .align 11
 .global vector_table
@@ -46,8 +53,6 @@ vector_table:
 	ventry bad_entry
 	.org 0x780
 	ventry bad_entry
-
-#include "entry-common.h"
 
 /*
  * Generate an exception vector entry stub:

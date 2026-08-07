@@ -14,7 +14,7 @@ static inline uint64_t esr_ec(uint64_t esr)
 
 void bad_mode(struct pt_regs *regs)
 {
-	printk("bad_mode: unexpected exception elr=%lx spsr=%lx esr=%lx\n",
+	printk("bad_mode: unexpected exception elr=%p spsr=%p esr=%p\n",
 	       regs->elr, regs->spsr, regs->esr);
 	while (1)
 		;
@@ -29,8 +29,8 @@ void el0_sync(struct pt_regs *regs)
 		return;
 	}
 
-	printk("el0_sync: unhandled exception esr=%lx elr=%lx\n",
-	       regs->esr, regs->elr);
+	printk("el0_sync: unhandled exception esr=%p elr=%p\n",
+	       (void *)regs->esr, (void *)regs->elr);
 	while (1)
 		;
 }
@@ -59,7 +59,7 @@ void el0_error(struct pt_regs *regs)
 
 void el1_sync(struct pt_regs *regs)
 {
-	printk("el1_sync: esr=%lx elr=%lx\n", regs->esr, regs->elr);
+	printk("el1_sync: esr=%p elr=%p\n", regs->esr, regs->elr);
 	while (1)
 		;
 }

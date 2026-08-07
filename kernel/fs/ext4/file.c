@@ -9,6 +9,7 @@ static ssize_t ext4_file_read(struct file *filp, char *buf, size_t len, loff_t *
 	struct inode *inode = filp->f_dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
 	uint32_t block_size = sb->s_blocksize;
+	ssize_t ret = 0;
 	ssize_t total = 0;
 	loff_t offset = *pos;
 
@@ -20,33 +21,39 @@ static ssize_t ext4_file_read(struct file *filp, char *buf, size_t len, loff_t *
 
 	while (len > 0) {
 		uint32_t iblock = (uint32_t)(offset / block_size);
-		uint32_t pblock;
+		uint64_t pblock;
 		uint32_t off_in_block = (uint32_t)(offset % block_size);
-		uint32_t to_copy;
-		struct buffer_head *bh;
-
-		if (ext4_get_block(inode, iblock, &pblock) != 0)
-			return total ? total : -EIO;
-
-		bh = sb_bread(sb, pblock);
-		if (!bh)
-			return total ? total : -EIO;
-
-		to_copy = block_size - off_in_block;
-		if (to_copy > len)
+		uint32_t to_copy = block_size - off_in_block;
+		if (to_copy > len) {
 			to_copy = (uint32_t)len;
-
+		}
+		ret = ext4_get_block(inode, iblock, &pblock);
+		if (ret == -ENOSPC) {
+			memset(buf, 0, to_copy);
+			goto cont;
+		}
+		if (ret != 0) {
+			ret = -EIO;
+			break;
+		}
+		struct buffer_head *bh = sb_bread(sb, pblock);
+		if (!bh) {
+			ret = -EIO;
+			break;
+		}
 		memcpy(buf, (char *)bh->b_data + off_in_block, to_copy);
 		brelse(bh);
-
+cont:
 		buf += to_copy;
 		offset += to_copy;
 		len -= to_copy;
 		total += to_copy;
 	}
 
-	*pos = offset;
-	return total;
+	if (total > 0)
+		*pos = offset;
+
+	return total ? total : ret;
 }
 
 static ssize_t ext4_file_write(struct file *filp, const char *buf, size_t len,
@@ -55,26 +62,33 @@ static ssize_t ext4_file_write(struct file *filp, const char *buf, size_t len,
 	struct inode *inode = filp->f_dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
 	uint32_t block_size = sb->s_blocksize;
+	ssize_t ret = 0;
 	ssize_t total = 0;
 	loff_t offset = *pos;
 
 	while (len > 0) {
 		uint32_t iblock = (uint32_t)(offset / block_size);
-		uint32_t pblock;
+		uint64_t pblock;
 		uint32_t off_in_block = (uint32_t)(offset % block_size);
 		uint32_t to_copy;
 		struct buffer_head *bh;
 
 		if (ext4_get_block(inode, iblock, &pblock) != 0) {
-			if (ext4_new_block(inode, &pblock) != 0)
-				return total ? total : -ENOSPC;
-			if (ext4_set_block(inode, iblock, pblock) != 0)
-				return total ? total : -ENOSPC;
+			if (ext4_new_block(inode, &pblock) != 0) {
+				ret = -ENOSPC;
+				break;
+			}
+			if (ext4_set_block(inode, iblock, pblock) != 0) {
+				ret = -ENOSPC;
+				break;
+			}
 		}
 
 		bh = sb_bread(sb, pblock);
-		if (!bh)
-			return total ? total : -EIO;
+		if (!bh) {
+			ret = -EIO;
+			break;
+		}
 
 		to_copy = block_size - off_in_block;
 		if (to_copy > len)
@@ -90,13 +104,15 @@ static ssize_t ext4_file_write(struct file *filp, const char *buf, size_t len,
 		total += to_copy;
 	}
 
-	if (offset > inode->i_size) {
-		inode->i_size = offset;
-		mark_inode_dirty(inode);
+	if (total > 0) {
+		*pos = offset;
+		if (offset > inode->i_size) {
+			inode->i_size = offset;
+			mark_inode_dirty(inode);
+		}
 	}
 
-	*pos = offset;
-	return total;
+	return total ? total : ret;
 }
 
 struct inode_operations ext4_file_inode_operations = { };

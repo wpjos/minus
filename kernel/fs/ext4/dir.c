@@ -4,6 +4,7 @@
 #include "errno.h"
 #include "stat.h"
 #include "bitops.h"
+#include "dirent.h"
 
 static struct ext4_dir_entry_2 *ext4_next_entry(struct ext4_dir_entry_2 *de)
 {
@@ -15,7 +16,7 @@ struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry)
 {
 	struct buffer_head *bh;
 	struct ext4_dir_entry_2 *de;
-	uint32_t block;
+	uint64_t block;
 	uint32_t block_size = dir->i_sb->s_blocksize;
 	uint32_t nr_blocks = (dir->i_size + block_size - 1) / block_size;
 	uint32_t bidx;
@@ -54,7 +55,7 @@ int ext4_dir_is_empty(struct inode *inode)
 {
 	struct buffer_head *bh;
 	struct ext4_dir_entry_2 *de;
-	uint32_t block;
+	uint64_t block;
 	int count = 0;
 
 	if (ext4_get_block(inode, 0, &block) != 0)
@@ -74,13 +75,87 @@ int ext4_dir_is_empty(struct inode *inode)
 	return count <= 2 ? 1 : 0;
 }
 
+static unsigned int ext4_file_type_to_dt(uint8_t type)
+{
+	switch (type) {
+	case EXT4_FT_REG_FILE:
+		return DT_REG;
+	case EXT4_FT_DIR:
+		return DT_DIR;
+	case EXT4_FT_CHRDEV:
+		return DT_CHR;
+	case EXT4_FT_BLKDEV:
+		return DT_BLK;
+	case EXT4_FT_FIFO:
+		return DT_FIFO;
+	case EXT4_FT_SOCK:
+		return DT_SOCK;
+	case EXT4_FT_SYMLINK:
+		return DT_LNK;
+	default:
+		return DT_UNKNOWN;
+	}
+}
+
+long ext4_iterate(struct file *filp, struct dir_context *ctx)
+{
+	struct inode *inode = filp->f_dentry->d_inode;
+	struct buffer_head *bh;
+	struct ext4_dir_entry_2 *de;
+	uint64_t block;
+	uint32_t block_size = inode->i_sb->s_blocksize;
+	uint32_t nr_blocks = (inode->i_size + block_size - 1) / block_size;
+	uint32_t bidx;
+	loff_t pos = 0;
+
+	for (bidx = 0; bidx < nr_blocks; bidx++) {
+		if (ext4_get_block(inode, bidx, &block) != 0)
+			return -EIO;
+		bh = sb_bread(inode->i_sb, block);
+		if (!bh)
+			return -EIO;
+
+		de = (struct ext4_dir_entry_2 *)bh->b_data;
+		while ((char *)de < (char *)bh->b_data + block_size) {
+			uint16_t rec_len = le16_to_cpu(de->rec_len);
+			uint16_t min_len = sizeof(struct ext4_dir_entry_2);
+			long ret;
+
+			if (rec_len < min_len ||
+			    (char *)de + rec_len > (char *)bh->b_data + block_size) {
+				brelse(bh);
+				return -EIO;
+			}
+
+			if (de->inode != 0 && pos >= ctx->pos) {
+				unsigned int d_type = ext4_file_type_to_dt(de->file_type);
+
+				ret = ctx->actor(ctx, de->name, de->name_len,
+						 pos,
+						 le32_to_cpu(de->inode),
+						 d_type);
+				if (ret) {
+					brelse(bh);
+					return ret > 0 ? 0 : ret;
+				}
+				ctx->pos = pos + rec_len;
+			}
+			pos += rec_len;
+			de = ext4_next_entry(de);
+		}
+		brelse(bh);
+	}
+
+	return 0;
+}
+
 int ext4_add_entry(struct inode *dir, const char *name, int len,
 		   uint32_t ino, uint8_t file_type)
 {
 	struct buffer_head *bh;
 	struct ext4_dir_entry_2 *de;
 	struct ext4_dir_entry_2 *prev;
-	uint32_t block;
+	uint64_t block;
 	uint32_t block_size = dir->i_sb->s_blocksize;
 	uint16_t rec_len;
 	uint16_t needed;
@@ -130,7 +205,7 @@ int ext4_add_entry(struct inode *dir, const char *name, int len,
 
 	/* Need to allocate a new directory block. */
 	{
-		uint32_t pblock;
+		uint64_t pblock;
 		if (ext4_new_block(dir, &pblock) != 0)
 			return -ENOSPC;
 		if (ext4_set_block(dir, bidx, pblock) != 0)
@@ -163,7 +238,7 @@ int ext4_delete_entry(struct inode *dir, const char *name, int len)
 	struct buffer_head *bh;
 	struct ext4_dir_entry_2 *de;
 	struct ext4_dir_entry_2 *prev;
-	uint32_t block;
+	uint64_t block;
 	uint32_t block_size = dir->i_sb->s_blocksize;
 	uint32_t bidx = 0;
 
@@ -205,7 +280,7 @@ int ext4_make_empty(struct inode *inode, struct inode *parent)
 {
 	struct buffer_head *bh;
 	struct ext4_dir_entry_2 *de;
-	uint32_t block;
+	uint64_t block;
 	uint32_t block_size = inode->i_sb->s_blocksize;
 	uint32_t rec_len;
 
@@ -243,4 +318,6 @@ int ext4_make_empty(struct inode *inode, struct inode *parent)
 	return 0;
 }
 
-struct file_operations ext4_dir_operations = { };
+struct file_operations ext4_dir_operations = {
+	.iterate = ext4_iterate,
+};

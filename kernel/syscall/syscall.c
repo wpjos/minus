@@ -45,6 +45,7 @@ struct syscall_entry {
 };
 
 static const struct syscall_entry sys_call_table[] = {
+	{ SYS_GETDENTS64,	(syscall_fn_t)sys_getdents64 },
 	{ SYS_MKDIRAT,		(syscall_fn_t)sys_mkdirat },
 	{ SYS_UNLINKAT,		(syscall_fn_t)sys_unlinkat },
 	{ SYS_OPENAT,		(syscall_fn_t)sys_openat },

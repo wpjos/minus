@@ -16,12 +16,8 @@ fi
 OUTDIR=`pwd`/output
 # 内核镜像（Kbuild 编译产物）
 KERNEL=${OUTDIR}/kernel.bin
-DTB=$OUTDIR/dtb/cortex-a72-virt.dtb
-
-if [ ! -f "rootfs.ext4" ]; then
-    dd if=/dev/zero of=rootfs.ext4 bs=1M count=256
-    mkfs.ext4 -F -O ^64bit,^has_journal rootfs.ext4
-fi
+DTB=${OUTDIR}/dtb/cortex-a72-virt.dtb
+ROOTFS=${OUTDIR}/rootfs/rootfs.ext4
 
 # QEMU 核心参数（AArch64 virt 平台）
 QEMU_CMD="qemu-system-aarch64 \
@@ -31,7 +27,7 @@ QEMU_CMD="qemu-system-aarch64 \
     -kernel ${KERNEL} \
     -dtb ${DTB} \
     -nographic \
-    -device virtio-blk-device,drive=hd0 -drive file=rootfs.ext4,format=raw,if=none,id=hd0 \
+    -device virtio-blk-device,drive=hd0 -drive file=${ROOTFS},format=raw,if=none,id=hd0 \
     ${DEBUG_FLAGS}"
 
 # ===================== 执行启动 =====================
