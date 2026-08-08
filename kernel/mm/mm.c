@@ -18,6 +18,7 @@ static void create_kernel_pgtable(uint64_t *pgd)
 	extern char __rodata_start[], __rodata_end[];
 	extern char __data_start[], __data_end[];
 	extern char __bss_start[], __bss_end[];
+	extern char __got_start[], __got_end[];
 
 #define CREATE_PTABLE(pgtable, start, end, attr) do {		\
 	uintptr_t _s = ALIGN_DOWN((uintptr_t)(start), PAGE_SIZE);	\
@@ -30,6 +31,7 @@ static void create_kernel_pgtable(uint64_t *pgd)
 	CREATE_PTABLE(pgd, __rodata_start, __rodata_end, MMU_REGION_NORMAL_RO);
 	CREATE_PTABLE(pgd, __data_start, __data_end, MMU_REGION_NORMAL_XN | PTE_UXN);
 	CREATE_PTABLE(pgd, __bss_start, __bss_end, MMU_REGION_NORMAL_XN | PTE_UXN);
+	CREATE_PTABLE(pgd, __got_start, __got_end, MMU_REGION_NORMAL_XN | PTE_UXN);
 #undef MAP_ALIGNED
 
 }

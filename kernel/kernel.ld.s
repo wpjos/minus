@@ -68,8 +68,17 @@ SECTIONS
 		. = . + 4096;
 		__init_stack = .;
 		*(.data)
+		*(.data.*)
 		. = ALIGN(4096);
 		__data_end = .;
+	}
+	.got : {
+		. = ALIGN(4096);
+		__got_start = .;
+		*(.got)
+		*(.got.*)
+		. = ALIGN(4096);
+		__got_end = .;
 	}
 	.bss : {
 		__bss_start = .;
