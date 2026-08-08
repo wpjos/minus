@@ -312,6 +312,82 @@ static void cmd_cat(const char *arg)
 	sys_close(fd);
 }
 
+static void cmd_touch(const char *arg)
+{
+	char path[PATH_MAX];
+	int fd;
+
+	if (!arg[0]) {
+		print("touch: missing operand\n");
+		return;
+	}
+
+	make_path(path, sizeof(path), arg);
+	fd = sys_openat(-1, path, O_CREAT | O_WRONLY, 0644);
+	if (fd < 0) {
+		print("touch: cannot create file\n");
+		return;
+	}
+
+	sys_close(fd);
+}
+
+static void cmd_echo(const char *arg)
+{
+	char path[PATH_MAX];
+	char text[LINE_MAX];
+	const char *p;
+	const char *redir;
+	size_t text_len;
+	int fd;
+
+	if (!arg[0]) {
+		print("\n");
+		return;
+	}
+
+	redir = NULL;
+	for (p = arg; *p; p++) {
+		if (*p == '>') {
+			redir = p;
+			break;
+		}
+	}
+
+	if (!redir) {
+		print(arg);
+		print("\n");
+		return;
+	}
+
+	text_len = redir - arg;
+	while (text_len > 0 && isspace(arg[text_len - 1]))
+		text_len--;
+	if (text_len >= sizeof(text))
+		text_len = sizeof(text) - 1;
+	memcpy(text, arg, text_len);
+	text[text_len] = '\0';
+
+	p = redir + 1;
+	while (isspace(*p))
+		p++;
+	if (!*p) {
+		print("echo: missing filename after >\n");
+		return;
+	}
+
+	make_path(path, sizeof(path), p);
+	fd = sys_openat(-1, path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+	if (fd < 0) {
+		print("echo: cannot open file\n");
+		return;
+	}
+
+	sys_write(fd, text, text_len);
+	sys_write(fd, "\n", 1);
+	sys_close(fd);
+}
+
 static void tokenize(char *line, char *cmd, char *arg)
 {
 	char *p = line;
@@ -396,6 +472,10 @@ void _start(void)
 			cmd_mkdir(arg);
 		else if (strcmp(cmd, "cat") == 0)
 			cmd_cat(arg);
+		else if (strcmp(cmd, "touch") == 0)
+			cmd_touch(arg);
+		else if (strcmp(cmd, "echo") == 0)
+			cmd_echo(arg);
 		else {
 			print("unknown command: ");
 			print(cmd);
