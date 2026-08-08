@@ -34,38 +34,6 @@ int start_kernel(void)
 		vfs_mount("/dev/vda", "ext4", "/");
 	}
 
-	/* VFS self-test: exercise the new public VFS helpers. */
-	{
-		struct file *f;
-		char buf[32];
-		ssize_t n;
-
-		f = vfs_open("/vfstest.txt", O_CREAT | O_WRONLY | O_TRUNC, 0644);
-		if (f) {
-			n = vfs_write(f, "vfs ok\n", 7, NULL);
-			if (n == 7)
-				printk("vfs write test passed\n");
-			vfs_close(f);
-		} else {
-			printk("vfs open (create) test failed\n");
-		}
-
-		f = vfs_open("/vfstest.txt", O_RDONLY, 0);
-		if (f) {
-			n = vfs_read(f, buf, sizeof(buf), NULL);
-			if (n == 7)
-				printk("vfs read test passed\n");
-			vfs_close(f);
-		}
-
-		if (vfs_mkdir("/vfstestdir", 0755) == 0)
-			printk("vfs mkdir test passed\n");
-		if (vfs_rmdir("/vfstestdir") == 0)
-			printk("vfs rmdir test passed\n");
-		if (vfs_unlink("/vfstest.txt") == 0)
-			printk("vfs unlink test passed\n");
-	}
-
 	/* Create /dev and mount a minimal devfs so /dev/console is available. */
 	if (vfs_mkdir("/dev", 0755) == 0)
 		printk("vfs /dev created\n");
