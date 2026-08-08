@@ -24,6 +24,7 @@ void sched_init(struct task_struct *idle_task);
 void schedule(void);
 void scheduler_tick(void);
 void finish_task_switch(struct task_struct *prev);
+void schedule_if_needed(void);
 
 /* Add/remove tasks from the run queue. */
 void sched_enqueue(struct task_struct *task);

@@ -314,6 +314,19 @@ void run_user_init(const char *path)
 		goto fail_buf;
 	}
 
+	{
+		int fd;
+
+		for (fd = 0; fd <= 2; fd++) {
+			struct file *f = vfs_open("/dev/console", O_RDWR, 0);
+			if (!f) {
+				printk("loader: cannot open /dev/console for fd %d\n", fd);
+				goto fail_buf;
+			}
+			fd_install(task->files, fd, f);
+		}
+	}
+
 	kfree(elf_buf);
 
 	regs = (struct pt_regs *)(mm->kstack_top - sizeof(*regs));

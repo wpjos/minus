@@ -123,6 +123,7 @@ rootfs: $(SHELL_ELF) $(ROOTFS)
 
 $(ROOTFS):
 	@echo "\033[33m[Minus] Creating rootfs.ext4...\033[0m"
+	@mkdir -p $(ROOTFS_DIR)
 	dd if=/dev/zero of=$@ bs=1M count=1
 	mkfs.ext4 -F -O ^64bit,^has_journal $@
 

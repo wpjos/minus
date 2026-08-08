@@ -66,6 +66,12 @@ int start_kernel(void)
 			printk("vfs unlink test passed\n");
 	}
 
+	/* Create /dev and mount a minimal devfs so /dev/console is available. */
+	if (vfs_mkdir("/dev", 0755) == 0)
+		printk("vfs /dev created\n");
+	if (vfs_mount("none", "devfs", "/dev") == 0)
+		printk("devfs mounted\n");
+
 	run_user_init("/bin/shell");
 
 	irq_unmask();

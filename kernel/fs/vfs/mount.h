@@ -8,6 +8,8 @@
 struct vfsmount {
 	struct dentry	*mnt_root;
 	struct super_block *mnt_sb;
+	struct dentry	*mnt_mountpoint;
+	struct vfsmount	*mnt_parent;
 	char		mnt_devname[64];
 	struct dlist_node mnt_list;
 };

@@ -48,6 +48,7 @@ struct task_struct {
 	struct thread_info thread;	/* must be first */
 	struct sched_entity se;		/* scheduling entity */
 	uint64_t state;
+	int need_resched;		/* set by scheduler_tick, cleared in schedule */
 	int pid;
 	char name[TASK_NAME_LEN];
 	struct mm_struct *mm;

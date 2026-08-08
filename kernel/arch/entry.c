@@ -2,6 +2,7 @@
 #include "irq.h"
 #include "printk.h"
 #include "syscall.h"
+#include "sched.h"
 
 #define ESR_EL1_EC_SHIFT	26
 #define ESR_EL1_EC_MASK		0x3f
@@ -26,6 +27,7 @@ void el0_sync(struct pt_regs *regs)
 
 	if (ec == ESR_EL1_EC_SVC64) {
 		do_syscall(regs);
+		schedule_if_needed();
 		return;
 	}
 
@@ -39,6 +41,7 @@ void el0_irq(struct pt_regs *regs)
 {
 	(void)regs;
 	gic_handle_irq();
+	schedule_if_needed();
 }
 
 void el0_fiq(struct pt_regs *regs)

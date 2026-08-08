@@ -14,6 +14,7 @@ struct dentry {
 	struct dlist_node	d_subdirs;
 	struct inode		*d_inode;
 	struct super_block	*d_sb;
+	struct vfsmount		*d_mounted;
 	char			d_name[64];
 	int			d_count;
 };

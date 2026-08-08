@@ -47,6 +47,7 @@ struct dentry *lookup_one_len(const char *name, struct dentry *base, int len)
 static int follow_path(const char *path, struct path *path_out)
 {
 	struct dentry *dentry;
+	struct vfsmount *mnt;
 	const char *p;
 	char comp[64];
 	int i;
@@ -54,19 +55,26 @@ static int follow_path(const char *path, struct path *path_out)
 	if (!path || !path_out)
 		return -EINVAL;
 
-	if (path[0] == '/')
+	if (path[0] == '/') {
 		dentry = root_dentry;
-	else
-		dentry = current->files ? current->files->fd_array[0] ?
-			current->files->fd_array[0]->f_dentry : root_dentry
-			: root_dentry;
+		mnt = root_mnt;
+	} else {
+		struct file *cwd_file = current->files ? current->files->fd_array[0] : NULL;
 
-	if (!dentry)
+		if (cwd_file && cwd_file->f_dentry && cwd_file->f_dentry->d_inode &&
+		    S_ISDIR(cwd_file->f_dentry->d_inode->i_mode)) {
+			dentry = cwd_file->f_dentry;
+			mnt = cwd_file->f_vfsmnt;
+		} else {
+			dentry = root_dentry;
+			mnt = root_mnt;
+		}
+	}
+
+	if (!dentry || !mnt)
 		return -ENOENT;
 
 	dget(dentry);
-	path_out->dentry = dentry;
-	path_out->mnt = root_mnt;
 
 	p = path;
 	while (*p == '/')
@@ -97,11 +105,22 @@ static int follow_path(const char *path, struct path *path_out)
 			return -ENOENT;
 		}
 
-		dput(dentry);
-		dentry = next;
+		if (next->d_mounted) {
+			struct vfsmount *sub = next->d_mounted;
+
+			dget(sub->mnt_root);
+			dput(next);
+			dput(dentry);
+			dentry = sub->mnt_root;
+			mnt = sub;
+		} else {
+			dput(dentry);
+			dentry = next;
+		}
 	}
 
 	path_out->dentry = dentry;
+	path_out->mnt = mnt;
 	return 0;
 }
 

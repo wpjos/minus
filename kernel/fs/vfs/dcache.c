@@ -23,6 +23,7 @@ struct dentry *d_alloc(struct dentry *parent, const char *name)
 	memset(dentry, 0, sizeof(*dentry));
 	dlist_init(&dentry->d_child);
 	dlist_init(&dentry->d_subdirs);
+	dentry->d_mounted = NULL;
 	dentry->d_parent = parent ? parent : dentry;
 	dentry->d_count = 1;
 

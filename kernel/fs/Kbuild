@@ -4,5 +4,6 @@ obj-y += sysif/
 obj-y += vfs/
 obj-y += fsblock/
 obj-y += ext4/
+obj-y += devfs/
 
 include $(TOPDIR)/scripts/Kbuild.include

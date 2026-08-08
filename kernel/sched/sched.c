@@ -4,7 +4,6 @@
 #include "mmu.h"
 #include "memory.h"
 #include "irqflags.h"
-#include "printk.h"
 
 /* Number of timer ticks a task may run before being preempted. */
 #define SCHED_SLICE_TICKS	10
@@ -59,12 +58,16 @@ void scheduler_tick(void)
 	if (current->state == TASK_IDLE)
 		return;
 
-	if (current->se.time_slice > 0)
+	if (current->se.time_slice > 0) {
 		current->se.time_slice--;
+	}
 
-	/* Time slice exhausted: preempt directly from the timer handler. */
+	/* Time slice exhausted: request reschedule, but do not call schedule()
+	 * from interrupt context.  The actual switch happens when returning to
+	 * user space (el0_sync / el0_irq).
+	 */
 	if (current->se.time_slice == 0)
-		schedule();
+		current->need_resched = 1;
 }
 
 /*
@@ -118,7 +121,10 @@ void schedule(void)
 	if (!next)
 		next = idle_task;
 
+	next->need_resched = 0;
 	if (prev == next) {
+		/* No other runnable task: keep running but recharge the slice. */
+		prev->se.time_slice = SCHED_SLICE_TICKS;
 		local_irq_restore(flags);
 		return;
 	}
@@ -151,4 +157,14 @@ void schedule(void)
 
 	/* Now that we are outside the scheduler critical section, free zombies. */
 	release_dead_tasks();
+}
+
+/*
+ * schedule_if_needed - invoke the scheduler if a reschedule was requested.
+ * Call this only when about to return to user space (el0_sync / el0_irq).
+ */
+void schedule_if_needed(void)
+{
+	if (current->need_resched)
+		schedule();
 }

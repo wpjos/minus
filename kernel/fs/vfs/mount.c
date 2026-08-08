@@ -5,6 +5,7 @@
 #include "string.h"
 #include "mm.h"
 #include "errno.h"
+#include "stat.h"
 
 static struct dlist_node g_mounts;
 
@@ -43,30 +44,59 @@ int vfs_do_mount(const char *dev_name, const char *fs_name,
 	struct vfsmount *mnt;
 
 	fs = get_fs_type(fs_name);
-	if (!fs) {
+	if (!fs)
 		return -ENODEV;
-	}
 
 	mnt = kern_mount(fs, dev_name);
-	if (!mnt) {
+	if (!mnt)
 		return -EIO;
-	}
 
 	strncpy(mnt->mnt_devname, dev_name, sizeof(mnt->mnt_devname) - 1);
 
 	if (strcmp(dir_name, "/") == 0) {
+		mnt->mnt_mountpoint = mnt->mnt_root;
+		mnt->mnt_parent = NULL;
+		dget(mnt->mnt_mountpoint);
 		root_mnt = mnt;
 		root_dentry = mnt->mnt_root;
 		return 0;
 	}
 
-	/* Non-root mounts are not wired yet; roll back. */
-	dlist_del(&mnt->mnt_list);
-	if (mnt->mnt_sb && mnt->mnt_sb->s_type->kill_sb)
-		mnt->mnt_sb->s_type->kill_sb(mnt->mnt_sb);
-	dput(mnt->mnt_root);
-	kfree(mnt);
-	return -ENOSYS;
+	{
+		struct path p;
+		int ret;
+
+		ret = vfs_path_lookup(dir_name, &p);
+		if (ret < 0)
+			goto fail_mnt;
+
+		if (!p.dentry->d_inode || !S_ISDIR(p.dentry->d_inode->i_mode)) {
+			dput(p.dentry);
+			ret = -ENOTDIR;
+			goto fail_mnt;
+		}
+
+		if (p.dentry->d_mounted) {
+			dput(p.dentry);
+			ret = -EBUSY;
+			goto fail_mnt;
+		}
+
+		mnt->mnt_mountpoint = p.dentry;
+		mnt->mnt_parent = p.mnt;
+		dget(p.dentry);
+		p.dentry->d_mounted = mnt;
+		dput(p.dentry);
+		return 0;
+
+fail_mnt:
+		dlist_del(&mnt->mnt_list);
+		if (mnt->mnt_sb && mnt->mnt_sb->s_type->kill_sb)
+			mnt->mnt_sb->s_type->kill_sb(mnt->mnt_sb);
+		dput(mnt->mnt_root);
+		kfree(mnt);
+		return ret;
+	}
 }
 
 int vfs_do_umount(const char *dir_name)

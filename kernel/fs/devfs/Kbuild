@@ -1,0 +1,3 @@
+obj-y := devfs.o
+
+include $(TOPDIR)/scripts/Kbuild.include
