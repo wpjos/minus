@@ -99,6 +99,36 @@ static int follow_path(const char *path, struct path *path_out)
 			return -ENOTDIR;
 		}
 
+		if (strcmp(comp, ".") == 0)
+			continue;
+
+		if (strcmp(comp, "..") == 0) {
+			struct dentry *parent;
+
+			/*
+			 * If we are at the root of a mounted filesystem, climb up to
+			 * the parent mount first so that ".." inside /dev returns to
+			 * / rather than staying inside devfs.
+			 */
+			if (mnt->mnt_root == dentry && mnt->mnt_parent) {
+				struct vfsmount *parent_mnt = mnt->mnt_parent;
+
+				dget(mnt->mnt_mountpoint);
+				dput(dentry);
+				dentry = mnt->mnt_mountpoint;
+				mnt = parent_mnt;
+			}
+
+			parent = dentry->d_parent;
+			if (parent == dentry)
+				continue;
+
+			dget(parent);
+			dput(dentry);
+			dentry = parent;
+			continue;
+		}
+
 		next = lookup_one_len(comp, dentry, i);
 		if (!next) {
 			dput(dentry);
