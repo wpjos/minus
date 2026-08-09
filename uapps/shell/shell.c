@@ -12,6 +12,7 @@
 #define SYS_WRITE	64
 #define SYS_NEWFSTATAT	76
 #define SYS_EXIT	93
+#define SYS_EXECVE	221
 
 #define PATH_MAX	256
 #define LINE_MAX	128
@@ -102,6 +103,11 @@ static long sys_openat(int dirfd, const char *path, int flags, unsigned int mode
 static long sys_close(int fd)
 {
 	return syscall1(SYS_CLOSE, fd);
+}
+
+static long sys_execve(const char *path, char *const argv[], char *const envp[])
+{
+	return syscall3(SYS_EXECVE, (long)path, (long)argv, (long)envp);
 }
 
 static long sys_mkdirat(int dirfd, const char *path, unsigned int mode)
@@ -388,6 +394,20 @@ static void cmd_echo(const char *arg)
 	sys_close(fd);
 }
 
+static void cmd_run(const char *arg)
+{
+	char path[PATH_MAX];
+
+	if (!arg[0]) {
+		print("run: missing operand\n");
+		return;
+	}
+
+	make_path(path, sizeof(path), arg);
+	if (sys_execve(path, NULL, NULL) < 0)
+		print("run: failed\n");
+}
+
 static void tokenize(char *line, char *cmd, char *arg)
 {
 	char *p = line;
@@ -476,6 +496,8 @@ void _start(void)
 			cmd_touch(arg);
 		else if (strcmp(cmd, "echo") == 0)
 			cmd_echo(arg);
+		else if (strcmp(cmd, "run") == 0)
+			cmd_run(arg);
 		else {
 			print("unknown command: ");
 			print(cmd);
