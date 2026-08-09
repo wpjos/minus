@@ -42,6 +42,8 @@ struct file_operations {
 	ssize_t (*write)(struct file *, const char *buf, size_t len, loff_t *pos);
 	loff_t  (*llseek)(struct file *, loff_t offset, int whence);
 	long    (*iterate)(struct file *, struct dir_context *);
+	long    (*ioctl)(struct file *, unsigned int cmd, unsigned long arg);
+	long    (*mmap)(struct file *, void **addr, size_t length, loff_t offset);
 };
 
 /* VFS file helpers (public declarations are in include/fs/vfs.h). */

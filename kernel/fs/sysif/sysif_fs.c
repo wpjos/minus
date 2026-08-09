@@ -272,3 +272,42 @@ long sys_getdents64(unsigned int fd, char *buf, unsigned int count)
 	ret = vfs_readdir(file, &ctx.ctx);
 	return ret == 0 ? (long)ctx.pos : ret;
 }
+
+long sys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
+{
+	struct file *file;
+
+	file = fget(current->files, fd);
+	if (!file)
+		return -EBADF;
+
+	if (file->f_op && file->f_op->ioctl)
+		return file->f_op->ioctl(file, cmd, arg);
+
+	return -ENOTTY;
+}
+
+long sys_mmap(void *addr, size_t length, int prot, int flags,
+	      unsigned int fd, long offset)
+{
+	struct file *file;
+	void *uva;
+	long ret;
+
+	(void)addr;
+	(void)prot;
+	(void)flags;
+
+	file = fget(current->files, fd);
+	if (!file)
+		return -EBADF;
+
+	if (!file->f_op || !file->f_op->mmap)
+		return -ENODEV;
+
+	ret = file->f_op->mmap(file, &uva, length, (loff_t)offset);
+	if (ret < 0)
+		return ret;
+
+	return (long)uva;
+}

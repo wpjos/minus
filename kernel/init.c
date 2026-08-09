@@ -8,7 +8,7 @@
 #include "boot/cmdline.h"
 #include "string.h"
 #include "fcntl.h"
-#include "loader.h"
+#include "proc_execve.h"
 
 const char logo[] = "hello minus!!!\n";
 
@@ -40,7 +40,7 @@ int start_kernel(void)
 	if (vfs_mount("none", "devfs", "/dev") == 0)
 		printk("devfs mounted\n");
 
-	run_user_init("/bin/shell");
+	proc_execve("/bin/shell", NULL, NULL);
 
 	irq_unmask();
 

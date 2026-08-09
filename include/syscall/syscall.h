@@ -21,6 +21,9 @@
 #define SYS_GETPID	172
 #define SYS_EXECVE	221
 
+#define SYS_IOCTL	29
+#define SYS_MMAP	222
+
 void do_syscall(struct pt_regs *regs);
 
 #endif /* __SYSCALL_H__ */

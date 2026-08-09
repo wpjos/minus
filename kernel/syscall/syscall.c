@@ -3,37 +3,14 @@
 #include "sched.h"
 #include "errno.h"
 #include "sysif_fs.h"
-
-static long sys_exit(int code)
-{
-	(void)code;
-	current->state = TASK_DEAD;
-	schedule();
-	/* An exited task never comes back. */
-	while (1)
-		;
-	return 0;
-}
+#include "sysif_proc.h"
+#include "uaccess.h"
+#include "printk.h"
 
 static long sys_yield(void)
 {
 	schedule();
 	return 0;
-}
-
-static long sys_execve(const char *filename, char *const argv[],
-		       char *const envp[])
-{
-	(void)filename;
-	(void)argv;
-	(void)envp;
-	/* Real ELF loader not implemented yet. */
-	return -1;
-}
-
-static long sys_getpid(void)
-{
-	return current->pid;
 }
 
 typedef long (*syscall_fn_t)(uint64_t, uint64_t, uint64_t, uint64_t,
@@ -59,6 +36,8 @@ static const struct syscall_entry sys_call_table[] = {
 	{ SYS_YIELD,		(syscall_fn_t)sys_yield },
 	{ SYS_GETPID,		(syscall_fn_t)sys_getpid },
 	{ SYS_EXECVE,		(syscall_fn_t)sys_execve },
+	{ SYS_IOCTL,		(syscall_fn_t)sys_ioctl },
+	{ SYS_MMAP,		(syscall_fn_t)sys_mmap },
 };
 
 #define NR_SYSCALLS	(sizeof(sys_call_table) / sizeof(sys_call_table[0]))
@@ -67,6 +46,8 @@ void do_syscall(struct pt_regs *regs)
 {
 	uint64_t nr = regs->x[8];
 	size_t i;
+
+	current->pt_regs = regs;
 
 	for (i = 0; i < NR_SYSCALLS; i++) {
 		if (sys_call_table[i].nr == nr) {

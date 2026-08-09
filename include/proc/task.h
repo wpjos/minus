@@ -53,6 +53,7 @@ struct task_struct {
 	char name[TASK_NAME_LEN];
 	struct mm_struct *mm;
 	struct files_struct *files;
+	struct pt_regs *pt_regs;	/* syscall register frame */
 };
 
 void task_init(void);
