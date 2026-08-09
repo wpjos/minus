@@ -26,9 +26,34 @@ void sched_enqueue(struct task_struct *task)
 	uint32_t flags;
 
 	local_irq_save(flags);
+
+	/*
+	 * If the task is already linked to a queue (run queue, zombie list,
+	 * etc.), do not enqueue it again.  This makes it safe to wake a task
+	 * from interrupt context even if the task is concurrently being
+	 * enqueued by schedule().
+	 */
+	if (task->se.run_node.next != &task->se.run_node) {
+		local_irq_restore(flags);
+		return;
+	}
+
 	task->state = TASK_RUNNING;
 	task->se.time_slice = SCHED_SLICE_TICKS;
 	dlist_add_tail(&run_queue, &task->se.run_node);
+	local_irq_restore(flags);
+}
+
+void sched_wake_up(struct task_struct *task)
+{
+	uint32_t flags;
+
+	if (!task)
+		return;
+
+	local_irq_save(flags);
+	task->state = TASK_RUNNING;
+	sched_enqueue(task);
 	local_irq_restore(flags);
 }
 

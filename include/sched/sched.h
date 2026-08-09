@@ -31,6 +31,9 @@ void sched_enqueue(struct task_struct *task);
 void sched_dequeue(struct task_struct *task);
 struct task_struct *sched_pick_next(void);
 
+/* Wake a blocked task from interrupt or task context. */
+void sched_wake_up(struct task_struct *task);
+
 /* Architecture context switch (bottom half in switch.S). */
 extern struct task_struct *__switch_to(struct task_struct *prev,
 				       struct task_struct *next);

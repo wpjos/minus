@@ -30,16 +30,8 @@ SHELL_ELF     := $(OUTPUT)/shell.elf
 SHELL_DIR     := $(TOPDIR)/uapps/shell
 
 # 公共头文件搜索路径（C/汇编/链接脚本预处理共用）
-KBUILD_CPPFLAGS := -I $(TOPDIR)/include/base \
-                   -I $(TOPDIR)/include/kernel \
-                   -I $(TOPDIR)/include/driver \
-                   -I $(TOPDIR)/include/arch \
-                   -I $(TOPDIR)/include/fdt \
-                   -I $(TOPDIR)/include/uapi \
-                   -I $(TOPDIR)/include/fs \
-                   -I $(TOPDIR)/include/mm \
-                   -I $(TOPDIR)/include/syscall \
-                   -I $(TOPDIR)/lib/libfdt \
+KBUILD_CPPFLAGS := $(addprefix -I,$(wildcard $(TOPDIR)/include/*)) \
+                   -I $(TOPDIR)/lib/libfdt
 
 # 编译标志（AArch64 裸机必备）
 KBUILD_CFLAGS := $(KBUILD_CPPFLAGS) \
