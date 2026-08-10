@@ -80,6 +80,7 @@ static void mmu_map_range(uint64_t *table, uintptr_t vstart,
 
 void mmu_map(uint64_t *pgd, uintptr_t va, uint64_t pa, uint64_t size, uint64_t attr)
 {
+
 	uintptr_t vstart = ALIGN_DOWN(va, PAGE_SIZE);
 	uintptr_t vend = ALIGN_UP(va + size, PAGE_SIZE);
 	uint64_t pstart = pa - (va - vstart);
@@ -108,6 +109,19 @@ void *mmu_ioremap(uint64_t pa, uint64_t size)
 	mmu_map(__init_pgd, va, pa, size, MMU_REGION_DEVICE);
 
 	return (void *)(__PA_VA__(pa));
+}
+
+/*
+ * Runtime region mapping for normal cacheable memory (e.g. DMA-able framebuffers).
+ * Maps [phys, phys+size) as Normal Inner/Outer WBWA in the kernel page table and
+ * returns the matching kernel virtual address.
+ */
+void *mmu_memremap(uint64_t pa, uint64_t size)
+{
+	uintptr_t va = __PA_VA__(pa);
+
+	mmu_map(__init_pgd, va, pa, size, MMU_REGION_NORMAL);
+	return (void *)va;
 }
 
 /*

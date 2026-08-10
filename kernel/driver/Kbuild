@@ -4,5 +4,6 @@ obj-y += timer/
 obj-y += virtio/
 obj-y += block/
 obj-y += console/
+obj-y += fb/
 
 include $(TOPDIR)/scripts/Kbuild.include

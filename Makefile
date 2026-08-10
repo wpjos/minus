@@ -26,9 +26,6 @@ ROOTFS        := $(ROOTFS_DIR)/rootfs.ext4
 DTB_SRCS      := $(wildcard $(TOPDIR)/arch/dts/*.dts)
 DTBS          := $(patsubst $(TOPDIR)/arch/dts/%.dts,$(DTB_DIR)/%.dtb,$(DTB_SRCS))
 
-SHELL_ELF     := $(OUTPUT)/shell.elf
-SHELL_DIR     := $(TOPDIR)/uapps/shell
-
 # 公共头文件搜索路径（C/汇编/链接脚本预处理共用）
 KBUILD_CPPFLAGS := $(addprefix -I,$(wildcard $(TOPDIR)/include/*)) \
                    -I $(TOPDIR)/lib/libfdt
@@ -67,13 +64,17 @@ $(AUTOCONF_H): $(DEFCONFIG) $(TOPDIR)/Kconfig $(TOPDIR)/arch/Kconfig $(KCONFIG_P
 	@python3 $(KCONFIG_PY) defconfig --defconfig=$(DEFCONFIG)
 
 # ===================== 核心目标 =====================
-# 默认目标：编译内核 + 生成二进制文件 + 编译设备树 + 准备 rootfs
-all: prepare $(TARGET) $(BIN_TARGET) dtbs rootfs
+# 默认目标：编译内核 + 生成二进制文件 + 编译设备树 + 用户态程序 + rootfs
+all: prepare $(TARGET) $(BIN_TARGET) dtbs uapps rootfs
 	@echo "\033[32m[Minus] Compile success! 🚀\033[0m"
 	@echo "\033[32m  ELF: $(TARGET)\033[0m"
 	@echo "\033[32m  BIN: $(BIN_TARGET)\033[0m"
 	@echo "\033[32m  DTB: $(DTB_DIR)/\033[0m"
-	@echo "\033[32m  SHELL: $(SHELL_ELF)\033[0m"
+	@echo "\033[32m  SHELL: $(OUTPUT)/shell.elf\033[0m"
+	@echo "\033[32m  FB_TEST: $(OUTPUT)/fb_test.elf\033[0m"
+
+# 引入用户态程序编译规则
+include $(TOPDIR)/uapps/Makefile
 
 # 准备输出目录（自动创建，避免报错），并同步生成 autoconf.h
 prepare: $(AUTOCONF_H)
@@ -81,6 +82,7 @@ prepare: $(AUTOCONF_H)
 	@mkdir -p $(OUTPUT) $(OUTPUT)/.tmp $(DTB_DIR) ${ROOTFS_DIR}
 
 # 调用顶层 Kbuild 执行编译（核心：-f 指定规则文件为 Kbuild）
+$(TARGET): | prepare
 $(TARGET):
 	@echo "\033[33m[Minus] Starting Kbuild compile...\033[0m"
 	$(MAKE) -f Kbuild \
@@ -98,20 +100,8 @@ $(BIN_TARGET): $(TARGET)
 	@echo "\033[33m[Minus] Generating binary file...\033[0m"
 	$(OBJCOPY) -O binary $< $@
 
-# 编译用户态 shell
-$(SHELL_ELF): $(SHELL_DIR)/shell.c $(SHELL_DIR)/shell.lds
-	@echo "\033[33m[Minus] Building user shell...\033[0m"
-	@mkdir -p $(OUTPUT)
-	$(CC) -ffreestanding -nostdlib -fno-stack-protector -fno-builtin \
-	      -march=armv8-a -mgeneral-regs-only -O2 -g -Wall -Werror \
-	      -I$(TOPDIR)/include/base -I$(TOPDIR)/include/uapi \
-	      -T $(SHELL_DIR)/shell.lds -o $@ $(SHELL_DIR)/shell.c
-
-# 生成/刷新 rootfs.ext4，并把 shell 安装到 /bin/shell
-rootfs: $(SHELL_ELF) $(ROOTFS)
-	@echo "\033[33m[Minus] Installing shell into rootfs...\033[0m"
-	printf "mkdir /bin\nrm /bin/shell\nwrite $(SHELL_ELF) /bin/shell\nchmod 0755 /bin/shell\n" | \
-	    debugfs -w $(ROOTFS) >/dev/null 2>&1 || true
+# 生成/刷新 rootfs.ext4，并安装用户态程序到 /bin
+rootfs: $(ROOTFS) uapps-install
 
 $(ROOTFS):
 	@echo "\033[33m[Minus] Creating rootfs.ext4...\033[0m"
@@ -134,6 +124,7 @@ clean:
 	$(RM) $(OUTPUT)
 	$(RM) $(TOPDIR)/.config $(TOPDIR)/include/generated
 	$(RM) $(TOPDIR)/scripts/__pycache__
+	$(MAKE) -C $(TOPDIR)/uapps TOPDIR=$(TOPDIR) OUTPUT=$(OUTPUT) uapps-clean
 	@echo "\033[32m[Minus] Clean success! ✨\033[0m"
 
 # 伪目标声明（避免与同名文件冲突）

@@ -13,6 +13,8 @@
 
 static struct file_operations console_fops;
 
+extern struct inode *devfs_new_fb0_inode(struct super_block *sb);
+
 static ssize_t console_read(struct file *file, char *buf, size_t len, loff_t *pos)
 {
 	size_t i;
@@ -69,10 +71,14 @@ static struct dentry *devfs_lookup(struct inode *dir, struct dentry *dentry)
 
 	(void)dir;
 
-	if (strcmp(dentry->d_name, "console") != 0)
+	if (strcmp(dentry->d_name, "console") == 0) {
+		inode = devfs_new_console_inode(dir->i_sb);
+	} else if (strcmp(dentry->d_name, "fb0") == 0) {
+		inode = devfs_new_fb0_inode(dir->i_sb);
+	} else {
 		return NULL;
+	}
 
-	inode = devfs_new_console_inode(dir->i_sb);
 	if (!inode)
 		return NULL;
 
@@ -90,6 +96,7 @@ static long devfs_iterate(struct file *file, struct dir_context *ctx)
 		{ ".", 1, DT_DIR },
 		{ "..", 1, DT_DIR },
 		{ "console", 2, DT_CHR },
+		{ "fb0", 3, DT_CHR },
 	};
 	size_t i;
 	loff_t pos;

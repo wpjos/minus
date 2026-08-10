@@ -49,12 +49,102 @@
 #define VRING_DESC_F_WRITE		2
 #define VRING_DESC_F_INDIRECT		4
 
+#define VIRTQUEUE_MAX_SIZE	64
+
 /* Virtqueue sizes */
 #define VIRTIO_BLK_QUEUE_SIZE		16
 #define VRING_DESC_SIZE			16
 
-/* Virtio-blk device ID and features */
-#define VIRTIO_ID_BLOCK			2
+/* Virtio device IDs */
+#define VIRTIO_ID_BLOCK		2
+#define VIRTIO_ID_GPU		16
+
+#define VIRTIO_GPU_QUEUE_SIZE	64
+
+#define VIRTIO_GPU_CMD_GET_DISPLAY_INFO		0x0100
+#define VIRTIO_GPU_CMD_RESOURCE_CREATE_2D	0x0101
+#define VIRTIO_GPU_CMD_RESOURCE_UNREF		0x0102
+#define VIRTIO_GPU_CMD_SET_SCANOUT		0x0103
+#define VIRTIO_GPU_CMD_RESOURCE_FLUSH		0x0104
+#define VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D	0x0105
+#define VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING	0x0106
+#define VIRTIO_GPU_CMD_RESOURCE_DETACH_BACKING	0x0107
+
+#define VIRTIO_GPU_RESP_OK_NODATA		0x1100
+#define VIRTIO_GPU_RESP_OK_DISPLAY_INFO		0x1101
+
+#define VIRTIO_GPU_FORMAT_X8R8G8B8_UNORM	4
+
+#define VIRTIO_GPU_FLAG_FENCE			0x01
+
+struct virtio_gpu_ctrl_hdr {
+	uint32_t type;
+	uint32_t flags;
+	uint64_t fence_id;
+	uint32_t ctx_id;
+	uint32_t padding;
+};
+
+struct virtio_gpu_rect {
+	uint32_t x;
+	uint32_t y;
+	uint32_t width;
+	uint32_t height;
+};
+
+struct virtio_gpu_display_one {
+	struct virtio_gpu_rect r;
+	uint32_t enabled;
+	uint32_t flags;
+};
+
+struct virtio_gpu_resp_display_info {
+	struct virtio_gpu_ctrl_hdr hdr;
+	struct virtio_gpu_display_one pmodes[16];
+};
+
+struct virtio_gpu_resource_create_2d {
+	struct virtio_gpu_ctrl_hdr hdr;
+	uint32_t resource_id;
+	uint32_t format;
+	uint32_t width;
+	uint32_t height;
+};
+
+struct virtio_gpu_mem_entry {
+	uint64_t addr;
+	uint32_t length;
+	uint32_t padding;
+};
+
+struct virtio_gpu_resource_attach_backing {
+	struct virtio_gpu_ctrl_hdr hdr;
+	uint32_t resource_id;
+	uint32_t nr_entries;
+	struct virtio_gpu_mem_entry entries[1];
+};
+
+struct virtio_gpu_set_scanout {
+	struct virtio_gpu_ctrl_hdr hdr;
+	struct virtio_gpu_rect r;
+	uint32_t scanout_id;
+	uint32_t resource_id;
+};
+
+struct virtio_gpu_transfer_to_host_2d {
+	struct virtio_gpu_ctrl_hdr hdr;
+	struct virtio_gpu_rect r;
+	uint64_t offset;
+	uint32_t resource_id;
+	uint32_t padding;
+};
+
+struct virtio_gpu_resource_flush {
+	struct virtio_gpu_ctrl_hdr hdr;
+	struct virtio_gpu_rect r;
+	uint32_t resource_id;
+	uint32_t padding;
+};
 
 #define VIRTIO_BLK_F_SIZE_MAX		1
 #define VIRTIO_BLK_F_SEG_MAX		2
@@ -106,7 +196,7 @@ struct virtqueue {
 	struct vring_desc *desc;
 	struct vring_avail *avail;
 	struct vring_used *used;
-	void *data[VIRTIO_BLK_QUEUE_SIZE];
+	void *data[VIRTQUEUE_MAX_SIZE];
 };
 
 struct virtio_device {
@@ -176,6 +266,7 @@ static inline void virtio_writel(uintptr_t base, uint32_t off, uint32_t val)
 int virtio_mmio_probe(struct platform_device *pdev);
 int virtio_mmio_setup_queue(struct virtio_device *vdev, uint32_t qid,
 			    uint32_t num);
+void virtio_mmio_set_status(struct virtio_device *vdev, uint32_t status);
 void virtio_mmio_notify(struct virtio_device *vdev, uint32_t qid);
 int virtio_add_buf(struct virtio_device *vdev, struct vring_desc *descs,
 		   uint32_t ndescs, void *cookie);

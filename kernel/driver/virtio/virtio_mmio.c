@@ -6,6 +6,7 @@
 #include "platform.h"
 #include "module.h"
 #include "memory.h"
+#include "printk.h"
 
 static uint32_t vring_size(uint32_t num, uint32_t align)
 {
@@ -159,7 +160,7 @@ static int virtio_mmio_negotiate_features(struct virtio_device *vdev)
 	return 0;
 }
 
-static void virtio_mmio_set_status(struct virtio_device *vdev, uint32_t status)
+void virtio_mmio_set_status(struct virtio_device *vdev, uint32_t status)
 {
 	uint32_t old;
 
@@ -193,6 +194,8 @@ int virtio_mmio_probe(struct platform_device *pdev)
 	if (device_id == 0)
 		return 0; /* no device */
 
+	printk("virtio-mmio: probe device id=%u\n", device_id);
+
 	vdev = (struct virtio_device *)kmalloc(sizeof(*vdev));
 	if (!vdev)
 		return -1;
@@ -216,16 +219,6 @@ int virtio_mmio_probe(struct platform_device *pdev)
 	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_FEATURES_OK);
 
 	virtio_writel(vdev->base, VIRTIO_MMIO_GUEST_PAGE_SIZE, 4096);
-
-	ret = virtio_mmio_setup_queue(vdev, 0, VIRTIO_BLK_QUEUE_SIZE);
-	if (ret < 0) {
-		virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_FAILED);
-		kfree(vdev);
-		return -1;
-	}
-
-	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_DRIVER_OK);
-	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_STARTED);
 
 	virtio_device_register(vdev);
 

@@ -26,7 +26,8 @@ QEMU_CMD="qemu-system-aarch64 \
     -m 1G \
     -kernel ${KERNEL} \
     -dtb ${DTB} \
-    -nographic \
+    -serial stdio \
+    -device virtio-gpu-device \
     -device virtio-blk-device,drive=hd0 -drive file=${ROOTFS},format=raw,if=none,id=hd0 \
     ${DEBUG_FLAGS}"
 

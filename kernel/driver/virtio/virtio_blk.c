@@ -95,6 +95,14 @@ static int virtio_blk_probe(struct virtio_device *vdev)
 {
 	struct virtio_blk *vblk;
 	struct virtio_blk_config *cfg;
+	int ret;
+
+	ret = virtio_mmio_setup_queue(vdev, 0, VIRTIO_BLK_QUEUE_SIZE);
+	if (ret < 0)
+		return -1;
+
+	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_DRIVER_OK);
+	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_STARTED);
 
 	cfg = (struct virtio_blk_config *)(vdev->base + VIRTIO_MMIO_CONFIG_BASE);
 
