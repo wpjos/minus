@@ -36,8 +36,6 @@ int virtio_mmio_setup_queue(struct virtio_device *vdev, uint32_t qid,
 	mem = kzalloc_pages(size);
 	if (!mem)
 		return -1;
-	memset(mem, 0, size);
-
 	desc = mem;
 	/*
 	 * Legacy virtio vring layout: descriptor table first, then the available
