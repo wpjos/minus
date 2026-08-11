@@ -4,7 +4,6 @@
 #include "buddy.h"
 #include "page.h"
 #include "mmu.h"
-#include "cache.h"
 #include "string.h"
 #include "memory.h"
 #include "module.h"
@@ -227,9 +226,6 @@ static int virtio_gpu_fb_flush(struct fb_info *info, int x, int y, int w, int h)
 
 	if (x1 <= x0 || y1 <= y0)
 		return 0;
-
-	flush_dcache_icache_range((char *)gpu->fb_base + y0 * gpu->stride,
-				  (y1 - y0) * gpu->stride);
 
 	ret = virtio_gpu_transfer_to_host_2d(gpu->vdev, gpu->resource_id,
 					     x0, y0, x1 - x0, y1 - y0,

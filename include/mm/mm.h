@@ -14,6 +14,7 @@ uint64_t memblock_mem_end(void);
 void mm_init(void);
 
 void *kmalloc(size_t size);
+void *kzalloc(size_t size);
 void kfree(void *objp);
 
 /* Allocate physically contiguous pages and zero them. */

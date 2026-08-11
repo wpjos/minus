@@ -226,6 +226,15 @@ void *kmalloc(uint32_t size)
 	return kmem_cache_alloc(&kmalloc_caches[idx]);
 }
 
+void *kzalloc(uint32_t size)
+{
+	void *ptr = kmalloc(size);
+	if (ptr) {
+		memset(ptr, 0, size);
+	}
+	return ptr;
+}
+
 void kfree(void *objp)
 {
 	struct page *page;

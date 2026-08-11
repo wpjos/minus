@@ -8,9 +8,8 @@
 
 struct mm_struct *vma_alloc_init(void)
 {
-	struct mm_struct *mm = kmalloc(sizeof(struct mm_struct));
+	struct mm_struct *mm = kzalloc(sizeof(struct mm_struct));
 	if (mm != NULL) {
-		memset(mm, 0, sizeof(*mm));
 		dlist_init(&mm->vma_list);
 		mm->mmap_base = USER_MMAP_BASE;
 	}

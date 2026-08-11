@@ -26,10 +26,9 @@ struct task_struct *task_alloc(const char *name)
 {
 	struct task_struct *task;
 
-	task = kmalloc(sizeof(*task));
+	task = kzalloc(sizeof(*task));
 	if (!task)
 		return NULL;
-	memset(task, 0, sizeof(*task));
 
 	task->mm = vma_alloc_init();
 	if (!task->mm) {

@@ -12,7 +12,6 @@
 #include "errno.h"
 #include "stat.h"
 #include "fcntl.h"
-#include "cache.h"
 #include "printk.h"
 
 #define MAX_ELF_SIZE (16 * 1024 * 1024)
@@ -39,20 +38,18 @@ static int proc_map_user_page(struct mm_struct *mm, uintptr_t uva,
 	struct vm_area_struct *vma;
 	uint64_t attr = proc_prot_to_attr(flags);
 	uint64_t pa = page_to_phy(page);
-	void *kvaddr = page_to_virt(page);
+	uint64_t size = (PAGE_SIZE << page->order);
 
-	vma = (struct vm_area_struct *)kmalloc(sizeof(*vma));
+	vma = (struct vm_area_struct *)kzalloc(sizeof(*vma));
 	if (!vma)
 		return -ENOMEM;
 
-	memset(vma, 0, sizeof(*vma));
 	vma->start = uva;
-	vma->end = uva + PAGE_SIZE;
+	vma->end = uva + size;
 	vma->flags = flags;
 	vma->page = page;
 
-	mmu_map(mm->pgd, uva, pa, PAGE_SIZE, attr);
-	flush_dcache_icache_range(kvaddr, PAGE_SIZE);
+	mmu_map(mm->pgd, uva, pa, size, attr);
 
 	dlist_add_tail(&mm->vma_list, &vma->node);
 	return 0;
