@@ -10,11 +10,12 @@ struct vspace;
 
 #define TASK_NAME_LEN	32
 
-#define TASK_RUNNING	0
-#define TASK_BLOCKED	1
-#define TASK_ZOMBIE	2
-#define TASK_DEAD	3
-#define TASK_IDLE	4		/* idle task: runnable but not on run queue */
+#define TASK_INIT	0	/* newly created, not yet on run queue */
+#define TASK_READY	1	/* on run queue, waiting for CPU */
+#define TASK_RUNNING	2	/* currently executing */
+#define TASK_BLOCKED	3	/* waiting for an event */
+#define TASK_DEAD	4	/* exited, pending cleanup */
+#define TASK_ZOMBIE	5	/* cleaned up, waiting to be reaped */
 
 /* Saved FP/SIMD context.  AArch64 has 32 128-bit vector registers. */
 struct fpsimd_state {

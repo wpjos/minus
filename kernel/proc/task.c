@@ -15,7 +15,7 @@ void task_init(void)
 {
 	memset(&init_task, 0, sizeof(init_task));
 	init_task.pid = 0;
-	init_task.state = TASK_IDLE;
+	init_task.state = TASK_RUNNING;
 	strncpy(init_task.name, "idle", sizeof(init_task.name) - 1);
 	dlist_init(&init_task.se.run_node);
 	init_task.vspace = NULL;
@@ -26,7 +26,7 @@ static void task_init_identity(struct task_struct *task, const char *name)
 {
 	task->pid = next_pid++;
 	strncpy(task->name, name, sizeof(task->name) - 1);
-	task->state = TASK_RUNNING;
+	task->state = TASK_INIT;
 	dlist_init(&task->se.run_node);
 }
 

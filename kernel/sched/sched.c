@@ -38,7 +38,7 @@ void sched_enqueue(struct task_struct *task)
 		return;
 	}
 
-	task->state = TASK_RUNNING;
+	task->state = TASK_READY;
 	task->se.time_slice = SCHED_SLICE_TICKS;
 	dlist_add_tail(&run_queue, &task->se.run_node);
 	local_irq_restore(flags);
@@ -52,7 +52,6 @@ void sched_wake_up(struct task_struct *task)
 		return;
 
 	local_irq_save(flags);
-	task->state = TASK_RUNNING;
 	sched_enqueue(task);
 	local_irq_restore(flags);
 }
@@ -79,8 +78,8 @@ struct task_struct *sched_pick_next(void)
 
 void scheduler_tick(void)
 {
-	/* Idle has no time slice; rely on new tasks or explicit yields. */
-	if (current->state == TASK_IDLE)
+	/* No point preempting the only runnable task. */
+	if (dlist_empty(&run_queue))
 		return;
 
 	if (current->se.time_slice > 0) {
@@ -146,6 +145,7 @@ void schedule(void)
 	if (!next)
 		next = idle_task;
 
+	next->state = TASK_RUNNING;
 	next->need_resched = 0;
 	if (prev == next) {
 		/* No other runnable task: keep running but recharge the slice. */
