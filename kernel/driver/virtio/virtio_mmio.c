@@ -1,4 +1,5 @@
 #include "virtio.h"
+#include "virtio_mmio.h"
 #include "mm.h"
 #include "string.h"
 #include "mmu.h"

@@ -1,4 +1,6 @@
 #include "virtio.h"
+#include "virtio_mmio.h"
+#include "virtio_gpu.h"
 #include "fb.h"
 #include "mm.h"
 #include "buddy.h"
