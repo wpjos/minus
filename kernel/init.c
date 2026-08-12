@@ -40,7 +40,7 @@ int start_kernel(void)
 	if (vfs_mount("none", "devfs", "/dev") == 0)
 		printk("devfs mounted\n");
 
-	proc_execve("/bin/shell", NULL, NULL);
+	proc_spawn("/bin/shell", NULL, NULL);
 
 	irq_unmask();
 

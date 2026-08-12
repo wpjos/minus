@@ -2,25 +2,25 @@
 #include "sched.h"
 #include "page.h"
 #include "task.h"
-#include "vma.h"
+#include "vspace.h"
 #include "string.h"
 #include "memory.h"
 
 long copy_from_user(void *to, const void *from, size_t n)
 {
-	struct mm_struct *mm = current->mm;
+	struct vspace *vs = current->vspace;
 	uint8_t *dst = to;
 	uintptr_t addr = (uintptr_t)from;
 	size_t left = n;
 
-	if (!mm)
+	if (!vs)
 		return n;
 
 	while (left > 0) {
 		struct page *page;
 		size_t offset, chunk;
 
-		page = vma_find_page(mm, addr, &offset);
+		page = vspace_find_page(vs, addr, &offset);
 		if (!page)
 			return left;
 
@@ -40,19 +40,19 @@ long copy_from_user(void *to, const void *from, size_t n)
 
 long copy_to_user(void *to, const void *from, size_t n)
 {
-	struct mm_struct *mm = current->mm;
+	struct vspace *vs = current->vspace;
 	const uint8_t *src = from;
 	uintptr_t addr = (uintptr_t)to;
 	size_t left = n;
 
-	if (!mm)
+	if (!vs)
 		return n;
 
 	while (left > 0) {
 		struct page *page;
 		size_t offset, chunk;
 
-		page = vma_find_page(mm, addr, &offset);
+		page = vspace_find_page(vs, addr, &offset);
 		if (!page)
 			return left;
 
@@ -72,11 +72,11 @@ long copy_to_user(void *to, const void *from, size_t n)
 
 long strncpy_from_user(char *dst, const char *src, size_t n)
 {
-	struct mm_struct *mm = current->mm;
+	struct vspace *vs = current->vspace;
 	uintptr_t addr = (uintptr_t)src;
 	size_t left = n;
 
-	if (!mm || n == 0)
+	if (!vs || n == 0)
 		return n;
 
 	while (left > 1) {
@@ -84,7 +84,7 @@ long strncpy_from_user(char *dst, const char *src, size_t n)
 		size_t offset, chunk;
 		size_t i;
 
-		page = vma_find_page(mm, addr, &offset);
+		page = vspace_find_page(vs, addr, &offset);
 		if (!page)
 			break;
 

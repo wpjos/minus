@@ -4,7 +4,7 @@
 #include "inode.h"
 #include "super.h"
 #include "task.h"
-#include "vma.h"
+#include "vspace.h"
 #include "uaccess.h"
 #include "errno.h"
 #include "page.h"
@@ -65,21 +65,21 @@ static long fb0_mmap(struct file *file, void **addr, size_t length,
 		     loff_t offset)
 {
 	struct fb_info *info = (struct fb_info *)file->f_private;
-	struct mm_struct *mm = current->mm;
+	struct vspace *vs = current->vspace;
 	uint64_t uva;
 	size_t size;
 	int ret;
 
 	(void)offset;
 
-	if (!info || !mm || !mm->pgd)
+	if (!info || !vs || !vs->pgd)
 		return -EINVAL;
 
 	size = PAGE_ALIGN(info->screen_size);
 	if (length < size)
 		return -EINVAL;
 
-	ret = vma_map_contig_phys(mm, info->phys_base, size,
+	ret = vspace_map_contig_phys(vs, info->phys_base, size,
 				  VM_READ | VM_WRITE, &uva);
 	if (ret < 0)
 		return ret;

@@ -1,7 +1,7 @@
 #include "loader.h"
 #include "elf.h"
 #include "task.h"
-#include "vma.h"
+#include "vspace.h"
 #include "mmu.h"
 #include "memory.h"
 #include "page.h"
@@ -32,44 +32,44 @@ static uint64_t proc_prot_to_attr(uint32_t flags)
 	return MMU_REGION_USER_RO;
 }
 
-static int proc_map_user_page(struct mm_struct *mm, uintptr_t uva,
+static int proc_map_user_page(struct vspace *vs, uintptr_t uva,
 			      struct page *page, uint32_t flags)
 {
-	struct vm_area_struct *vma;
+	struct vregion *vr;
 	uint64_t attr = proc_prot_to_attr(flags);
 	uint64_t pa = page_to_phy(page);
 	uint64_t size = (PAGE_SIZE << page->order);
 
-	vma = (struct vm_area_struct *)kzalloc(sizeof(*vma));
-	if (!vma)
+	vr = (struct vregion *)kzalloc(sizeof(*vr));
+	if (!vr)
 		return -ENOMEM;
 
-	vma->start = uva;
-	vma->end = uva + size;
-	vma->flags = flags;
-	vma->page = page;
+	vr->start = uva;
+	vr->end = uva + size;
+	vr->flags = flags;
+	vr->page = page;
 
-	mmu_map(mm->pgd, uva, pa, size, attr);
+	mmu_map(vs->pgd, uva, pa, size, attr);
 
-	dlist_add_tail(&mm->vma_list, &vma->node);
+	dlist_add_tail(&vs->vregion_list, &vr->node);
 	return 0;
 }
 
-static void proc_unload_segment_pages(struct mm_struct *mm, uintptr_t vstart,
+static void proc_unload_segment_pages(struct vspace *vs, uintptr_t vstart,
 				      uintptr_t vend)
 {
 	struct dlist_node *node, *next;
-	struct vm_area_struct *vma;
+	struct vregion *vr;
 
-	node = mm->vma_list.next;
-	while (node != &mm->vma_list) {
+	node = vs->vregion_list.next;
+	while (node != &vs->vregion_list) {
 		next = node->next;
-		vma = container_of(node, struct vm_area_struct, node);
-		if (vma->start >= vstart && vma->start < vend) {
-			dlist_del(&vma->node);
-			if (vma->page)
-				buddy_free_pages(vma->page);
-			kfree(vma);
+		vr = container_of(node, struct vregion, node);
+		if (vr->start >= vstart && vr->start < vend) {
+			dlist_del(&vr->node);
+			if (vr->page)
+				buddy_free_pages(vr->page);
+			kfree(vr);
 		}
 		node = next;
 	}
@@ -79,7 +79,7 @@ static int proc_load_elf_segment(struct task_struct *task,
 				 struct elf64_phdr *ph, const char *elf_buf,
 				 size_t elf_size)
 {
-	struct mm_struct *mm = task->mm;
+	struct vspace *vs = task->vspace;
 	uintptr_t vstart = ALIGN_DOWN(ph->p_vaddr, PAGE_SIZE);
 	uintptr_t vend = ALIGN_UP(ph->p_vaddr + ph->p_memsz, PAGE_SIZE);
 	uintptr_t uva;
@@ -113,7 +113,7 @@ static int proc_load_elf_segment(struct task_struct *task,
 
 		page = buddy_alloc_pages(PAGE_SIZE);
 		if (!page) {
-			proc_unload_segment_pages(mm, vstart, vend);
+			proc_unload_segment_pages(vs, vstart, vend);
 			return -ENOMEM;
 		}
 
@@ -135,9 +135,9 @@ static int proc_load_elf_segment(struct task_struct *task,
 			memcpy((char *)kvaddr + dst_off, elf_buf + src_off, len);
 		}
 
-		if (proc_map_user_page(mm, uva, page, flags) != 0) {
+		if (proc_map_user_page(vs, uva, page, flags) != 0) {
 			buddy_free_pages(page);
-			proc_unload_segment_pages(mm, vstart, vend);
+			proc_unload_segment_pages(vs, vstart, vend);
 			return -ENOMEM;
 		}
 	}
@@ -147,7 +147,7 @@ static int proc_load_elf_segment(struct task_struct *task,
 
 static int proc_alloc_user_stack(struct task_struct *task)
 {
-	struct mm_struct *mm = task->mm;
+	struct vspace *vs = task->vspace;
 	struct page *page;
 	void *kvaddr;
 
@@ -158,13 +158,13 @@ static int proc_alloc_user_stack(struct task_struct *task)
 	kvaddr = page_to_virt(page);
 	memset(kvaddr, 0, PAGE_SIZE);
 
-	if (proc_map_user_page(mm, USER_STACK_TOP - PAGE_SIZE, page,
+	if (proc_map_user_page(vs, USER_STACK_TOP - PAGE_SIZE, page,
 			       VM_READ | VM_WRITE) != 0) {
 		buddy_free_pages(page);
 		return -ENOMEM;
 	}
 
-	mm->ustack_top = USER_STACK_TOP;
+	vs->ustack_top = USER_STACK_TOP;
 	return 0;
 }
 
@@ -246,7 +246,7 @@ int proc_load_elf(const char *path, struct task_struct *task,
 		  uintptr_t *entry, uintptr_t *stack_top)
 {
 	struct file *file;
-	struct mm_struct *mm = task->mm;
+	struct vspace *vs = task->vspace;
 	char *elf_buf = NULL;
 	size_t elf_size = 0;
 	struct elf64_ehdr *ehdr;
@@ -256,7 +256,7 @@ int proc_load_elf(const char *path, struct task_struct *task,
 
 	if (!path || !task || !entry || !stack_top)
 		return -EINVAL;
-	if (!mm || !mm->pgd)
+	if (!vs || !vs->pgd)
 		return -EINVAL;
 
 	file = vfs_open(path, O_RDONLY, 0);

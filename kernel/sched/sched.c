@@ -1,6 +1,6 @@
 #include "sched.h"
 #include "task.h"
-#include "vma.h"
+#include "vspace.h"
 #include "mmu.h"
 #include "memory.h"
 #include "irqflags.h"
@@ -161,11 +161,11 @@ void schedule(void)
 		sched_enqueue(prev);
 
 	/* Switch user page tables, or clear TTBR0 when entering idle/kernel mode. */
-	if (next->mm) {
-		if (next->mm != prev->mm)
+	if (next->vspace) {
+		if (next->vspace != prev->vspace)
 			mmu_switch_pgd(TTBR0_EL1,
-				       __VA_PA__((uintptr_t)next->mm->pgd));
-	} else if (prev->mm) {
+				       __VA_PA__((uintptr_t)next->vspace->pgd));
+	} else if (prev->vspace) {
 		mmu_clear_ttbr0();
 	}
 

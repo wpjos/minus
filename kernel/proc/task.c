@@ -1,7 +1,7 @@
 #include "task.h"
 #include "sched.h"
 #include "mm.h"
-#include "vma.h"
+#include "vspace.h"
 #include "pt_regs.h"
 #include "mmu.h"
 #include "printk.h"
@@ -18,53 +18,56 @@ void task_init(void)
 	init_task.state = TASK_IDLE;
 	strncpy(init_task.name, "idle", sizeof(init_task.name) - 1);
 	dlist_init(&init_task.se.run_node);
-	init_task.mm = NULL;
+	init_task.vspace = NULL;
 	init_task.files = alloc_files_struct();
 }
 
-struct task_struct *task_alloc(const char *name)
+static void task_init_identity(struct task_struct *task, const char *name)
 {
-	struct task_struct *task;
-
-	task = kzalloc(sizeof(*task));
-	if (!task)
-		return NULL;
-
-	task->mm = vma_alloc_init();
-	if (!task->mm) {
-		kfree(task);
-		return NULL;
-	}
-
-	task->files = alloc_files_struct();
-	if (!task->files) {
-		kfree(task->mm);
-		kfree(task);
-		return NULL;
-	}
-
 	task->pid = next_pid++;
 	strncpy(task->name, name, sizeof(task->name) - 1);
 	task->state = TASK_RUNNING;
 	dlist_init(&task->se.run_node);
-
-	return task;
 }
 
-static void free_task_pages(struct task_struct *task)
+/*
+ * Allocate a task and all per-task resources.  Each sub-resource has its own
+ * allocation helper so failures can be unwound cleanly.
+ */
+struct task_struct *task_alloc(const char *name)
 {
-	if (task->mm) {
-		vma_free_all(task->mm);
-		kfree(task->mm);
-	}
-	if (task->files)
-		kfree(task->files);
+	struct task_struct *task;
+
+	task = kzalloc(sizeof(struct task_struct));
+	if (!task)
+		return NULL;
+
+	task->vspace = vspace_alloc();
+	if (!task->vspace)
+		goto fail_task;
+
+	task->files = alloc_files_struct();
+	if (!task->files)
+		goto fail_vspace;
+
+	task_init_identity(task, name);
+	return task;
+
+fail_vspace:
+	vspace_free(task->vspace);
+fail_task:
 	kfree(task);
+	return NULL;
 }
 
 void task_free(struct task_struct *task)
 {
-	free_task_pages(task);
+	if (!task)
+		return;
+
+	vspace_free(task->vspace);
+	kfree(task->files);
+	kfree(task);
 }
 
 struct task_struct *task_idle_task(void)

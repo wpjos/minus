@@ -2,7 +2,7 @@
 #include "loader.h"
 #include "task.h"
 #include "sched.h"
-#include "vma.h"
+#include "vspace.h"
 #include "mmu.h"
 #include "memory.h"
 #include "page.h"
@@ -19,29 +19,6 @@
 #include "uaccess.h"
 
 extern void ret_to_user(void);
-
-static int proc_setup_task_memory(struct task_struct *task)
-{
-	struct mm_struct *mm = task->mm;
-	void *kstack;
-
-	if (!mm)
-		return -EINVAL;
-
-	mm->pgd = (uint64_t *)kzalloc_pages(PAGE_SIZE);
-	if (!mm->pgd)
-		return -ENOMEM;
-
-	kstack = kzalloc_pages(PAGE_SIZE);
-	if (!kstack) {
-		kfree_pages(mm->pgd);
-		mm->pgd = NULL;
-		return -ENOMEM;
-	}
-
-	mm->kstack_top = (uint64_t)kstack + PAGE_SIZE;
-	return 0;
-}
 
 static int proc_setup_std_fds(struct task_struct *task)
 {
@@ -62,12 +39,12 @@ static int proc_setup_std_fds(struct task_struct *task)
 	return 0;
 }
 
-static void proc_setup_task_regs(struct task_struct *task,
-				 uintptr_t entry, uintptr_t stack_top)
+static void proc_setup_entry(struct task_struct *task,
+			    uintptr_t entry, uintptr_t stack_top)
 {
 	struct pt_regs *regs;
 
-	regs = (struct pt_regs *)(task->mm->kstack_top - sizeof(*regs));
+	regs = (struct pt_regs *)(task->vspace->kstack_top - sizeof(*regs));
 	memset(regs, 0, sizeof(*regs));
 	regs->elr = entry;
 	regs->sp_el0 = stack_top;
@@ -77,12 +54,52 @@ static void proc_setup_task_regs(struct task_struct *task,
 	task->thread.lr = (uint64_t)ret_to_user;
 }
 
+static int proc_setup_task(struct task_struct *task)
+{
+	int ret;
+	uintptr_t entry;
+	uintptr_t stack_top;
+
+	ret = proc_load_elf(task->name, task, &entry, &stack_top);
+	if (ret < 0)
+		return ret;
+
+	ret = proc_setup_std_fds(task);
+	if (ret < 0)
+		return ret;
+
+	proc_setup_entry(task, entry, stack_top);
+
+	return ret;
+}
+
+int proc_spawn(const char *filename, char *const argv[], char *const envp[])
+{
+	struct task_struct *task;
+	int ret;
+
+	(void)argv;
+	(void)envp;
+
+	if (!filename)
+		return -EINVAL;
+
+	task = task_alloc(filename);
+	if (!task)
+		return -ENOMEM;
+
+	ret = proc_setup_task(task);
+	if (ret != 0) {
+		task_free(task);
+	}
+	sched_enqueue(task);
+	return 0;
+}
+
 int proc_execve(const char *filename, char *const argv[], char *const envp[])
 {
 	struct task_struct *old_task = current;
 	struct task_struct *new_task;
-	uintptr_t entry;
-	uintptr_t stack_top;
 	int ret;
 
 	(void)argv;
@@ -98,33 +115,14 @@ int proc_execve(const char *filename, char *const argv[], char *const envp[])
 	/* Preserve the PID across exec. */
 	new_task->pid = old_task->pid;
 
-	ret = proc_setup_task_memory(new_task);
-	if (ret < 0)
-		goto fail_task;
-
-	ret = proc_load_elf(filename, new_task, &entry, &stack_top);
-	if (ret < 0)
-		goto fail_task;
-
-	ret = proc_setup_std_fds(new_task);
-	if (ret < 0)
-		goto fail_task;
-
-	proc_setup_task_regs(new_task, entry, stack_top);
-
-	/*
-	 * The idle task lives in static BSS and must never be freed.
-	 * Normal user tasks are replaced by the new image and released later.
-	 */
-	if (old_task->state != TASK_IDLE)
-		old_task->state = TASK_DEAD;
+	ret = proc_setup_task(new_task);
+	if (ret != 0) {
+		task_free(new_task);
+		return ret;
+	}
 	sched_enqueue(new_task);
+	old_task->state = TASK_DEAD;
 	schedule();
 
-	/* Never reached: the old task is dead and the new task takes over. */
 	return 0;
-
-fail_task:
-	task_free(new_task);
-	return ret;
 }

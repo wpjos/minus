@@ -6,7 +6,7 @@
 #include "pt_regs.h"
 
 struct files_struct;
-struct mm_struct;
+struct vspace;
 
 #define TASK_NAME_LEN	32
 
@@ -51,7 +51,7 @@ struct task_struct {
 	int need_resched;		/* set by scheduler_tick, cleared in schedule */
 	int pid;
 	char name[TASK_NAME_LEN];
-	struct mm_struct *mm;
+	struct vspace *vspace;
 	struct files_struct *files;
 	struct pt_regs *pt_regs;	/* syscall register frame */
 };
