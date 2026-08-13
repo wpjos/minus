@@ -402,6 +402,16 @@ int of_platform_populate(const void *fdt)
 		if (!compat)
 			continue;
 
+		/* Skip nodes explicitly marked as disabled */
+		{
+			const char *status;
+			int status_len;
+
+			status = fdt_getprop(fdt, node, "status", &status_len);
+			if (status && strcmp(status, "disabled") == 0)
+				continue;
+		}
+
 		pdev = (struct platform_device *)kmalloc(sizeof(struct platform_device));
 		if (!pdev)
 			continue;

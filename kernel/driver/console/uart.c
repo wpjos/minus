@@ -175,6 +175,7 @@ static int uart_remove(struct platform_device *pdev)
 
 static const struct of_device_id uart_of_match[] = {
 	{ .compatible = "arm,pl011" },
+	{ .compatible = "arm,pl011-axi" },
 	{ /* sentinel */ }
 };
 
