@@ -21,3 +21,5 @@ make
 
 # Step 2: Run in QEMU (normal mode)
 DEBUG=0 sh script/run.sh
+picocom -b 115200 /dev/tty.usbmodem5A980662461
+```

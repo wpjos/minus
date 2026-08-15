@@ -101,13 +101,10 @@ $(BIN_TARGET): $(TARGET)
 	$(OBJCOPY) -O binary $< $@
 
 # 生成/刷新 rootfs.ext4，并安装用户态程序到 /bin
-rootfs: $(ROOTFS) uapps-install
-
-$(ROOTFS):
+ROOTFS_SIZE_MB ?= 64
+rootfs: uapps
 	@echo "\033[33m[Minus] Creating rootfs.ext4...\033[0m"
-	@mkdir -p $(ROOTFS_DIR)
-	dd if=/dev/zero of=$@ bs=1M count=1
-	mkfs.ext4 -F -O ^64bit,^has_journal $@
+	@bash $(TOPDIR)/scripts/mkrootfs.sh $(ROOTFS_SIZE_MB) $(ROOTFS)
 
 dtbs: $(DTBS)
 	@echo "\033[32m[Minus] DTB files generated:\033[0m"

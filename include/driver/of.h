@@ -44,6 +44,12 @@ int of_get_irq_resource(const void *fdt, int nodeoffset, int index,
 /* Count the number of interrupts in an interrupts property */
 int of_get_irq_count(const void *fdt, int nodeoffset);
 
+/*
+ * Get the clock-frequency from the first fixed-clock referenced by the
+ * node's "clocks" property.  Returns 0 if not found.
+ */
+uint32_t of_get_clock_frequency(const void *fdt, int nodeoffset);
+
 /* Scan device tree and register platform devices */
 int of_platform_populate(const void *fdt);
 

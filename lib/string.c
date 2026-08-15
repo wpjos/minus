@@ -200,8 +200,18 @@ int vsprintf(char *str, const char *format, va_list args)
 			tmp = va_arg(args, char *);
 		} else if (*p == 'p') {
 			tmp = tostr(&buf[0], va_arg(args, long), 16);
+		} else if (*p == 'x' || *p == 'X') {
+			tmp = tostr(&buf[0], (uint64_t)va_arg(args, unsigned int), 16);
+		} else if (*p == 'd' || *p == 'i') {
+			int64_t val = (int64_t)va_arg(args, int);
+
+			if (val < 0) {
+				*str++ = '-';
+				val = -val;
+			}
+			tmp = tostr(&buf[0], (uint64_t)val, 10);
 		} else {
-			tmp = tostr(&buf[0], va_arg(args, int), 10);
+			tmp = tostr(&buf[0], (uint64_t)va_arg(args, unsigned int), 10);
 		}
 		while (tmp && *tmp != '\0') {
 			*str++ = *tmp++;

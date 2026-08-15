@@ -91,6 +91,7 @@ int proc_spawn(const char *filename, char *const argv[], char *const envp[])
 	ret = proc_setup_task(task);
 	if (ret != 0) {
 		task_free(task);
+		return ret;
 	}
 	sched_enqueue(task);
 	return 0;

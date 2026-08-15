@@ -1,0 +1,6 @@
+obj-y := sdhci-core.o sd.o sdhci-brcm.o mmcblk.o
+
+ccflags-y := -I$(TOPDIR)/kernel/driver/sdhci \
+	     -I$(TOPDIR)/kernel/driver/timer
+
+include $(TOPDIR)/scripts/Kbuild.include

@@ -3,7 +3,7 @@
 #include "mm.h"
 #include "module.h"
 
-#define MAX_BLKDEVS	16
+#define MAX_BLKDEVS	256
 
 static struct block_device *g_blkdevs[MAX_BLKDEVS];
 static struct dlist_node g_bdev_list;
@@ -78,9 +78,26 @@ int add_block_device(struct block_device *bdev)
 struct block_device *bdev_get_by_name(const char *dev_name)
 {
 	dev_t dev = -1;
+
 	if (strcmp(dev_name, "/dev/vda") == 0) {
 		dev = MKDEV(VIRTBLK_MAJOR, 0);
+	} else if (strncmp(dev_name, "/dev/mmcblk", 11) == 0) {
+		const char *p = dev_name + 11;
+		unsigned int hostno = 0, partno = 0;
+
+		while (*p >= '0' && *p <= '9')
+			hostno = hostno * 10 + (*p++ - '0');
+
+		if (*p == 'p') {
+			p++;
+			while (*p >= '0' && *p <= '9')
+				partno = partno * 10 + (*p++ - '0');
+		}
+
+		if (hostno < 32 && partno < MMC_PARTS_PER_DEV)
+			dev = MKDEV(MMCBLK_MAJOR, MMC_PART_MINOR(hostno, partno));
 	}
+
 	return bdev_get_by_dev(dev);
 }
 

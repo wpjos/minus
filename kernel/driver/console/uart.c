@@ -51,6 +51,11 @@ void uart_putc(char c)
 		return;
 	while (UART_FR(g_uart_base) & (1 << 5))
 		;
+	if (c == '\n') {
+		UART_DR(g_uart_base) = '\r';
+		while (UART_FR(g_uart_base) & (1 << 5))
+			;
+	}
 	UART_DR(g_uart_base) = c;
 }
 

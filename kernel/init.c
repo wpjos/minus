@@ -27,11 +27,30 @@ int start_kernel(void)
 
 	printk("%s\n", &logo[0]);
 
+	/* Parse firmware bootargs; if none or no root=, fall back to block devices. */
 	if (parse_bootargs(&args) == 0 && args.root_device[0]) {
 		const char *fstype = args.root_fstype[0] ? args.root_fstype : "ext4";
-		vfs_mount(args.root_device, fstype, "/");
+		if (vfs_mount(args.root_device, fstype, "/") == 0) {
+			printk("rootfs mounted: %s (%s)\n", args.root_device, fstype);
+		} else {
+			printk("rootfs mount failed: %s (%s)\n", args.root_device, fstype);
+		}
 	} else {
-		vfs_mount("/dev/vda", "ext4", "/");
+		printk("no root= in bootargs, trying /dev/vda\n");
+		if (vfs_mount("/dev/vda", "ext4", "/") == 0) {
+			printk("rootfs mounted: /dev/vda (ext4)\n");
+		} else {
+			printk("rootfs mount failed: /dev/vda (ext4), trying /dev/mmcblk0p2\n");
+			if (vfs_mount("/dev/mmcblk0p2", "ext4", "/") == 0) {
+				printk("rootfs mounted: /dev/mmcblk0p2 (ext4)\n");
+			} else {
+				printk("rootfs mount failed: /dev/mmcblk0p2 (ext4), trying /dev/mmcblk0\n");
+				if (vfs_mount("/dev/mmcblk0", "ext4", "/") == 0)
+					printk("rootfs mounted: /dev/mmcblk0 (ext4)\n");
+				else
+					printk("rootfs mount failed: /dev/mmcblk0 (ext4)\n");
+			}
+		}
 	}
 
 	/* Create /dev and mount a minimal devfs so /dev/console is available. */
@@ -40,7 +59,10 @@ int start_kernel(void)
 	if (vfs_mount("none", "devfs", "/dev") == 0)
 		printk("devfs mounted\n");
 
-	proc_spawn("/bin/shell", NULL, NULL);
+	if (proc_spawn("/bin/shell", NULL, NULL) == 0)
+		printk("shell spawned\n");
+	else
+		printk("shell spawn failed\n");
 
 	irq_unmask();
 

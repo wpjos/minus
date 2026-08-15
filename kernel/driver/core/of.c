@@ -361,6 +361,38 @@ int of_get_irq_count(const void *fdt, int nodeoffset)
 }
 
 /*
+ * Get the clock-frequency from the first fixed-clock referenced by the
+ * node's "clocks" property.
+ */
+uint32_t of_get_clock_frequency(const void *fdt, int nodeoffset)
+{
+	const fdt32_t *prop;
+	int len;
+	uint32_t phandle;
+	int clk_node;
+	const fdt32_t *freq;
+	int freq_len;
+
+	prop = fdt_getprop(fdt, nodeoffset, "clocks", &len);
+	if (!prop || len < (int)sizeof(fdt32_t))
+		return 0;
+
+	phandle = fdt32_to_cpu(prop[0]);
+	clk_node = fdt_node_offset_by_phandle(fdt, phandle);
+	if (clk_node < 0)
+		return 0;
+
+	if (!of_device_is_compatible(fdt, clk_node, "fixed-clock"))
+		return 0;
+
+	freq = fdt_getprop(fdt, clk_node, "clock-frequency", &freq_len);
+	if (!freq || freq_len < (int)sizeof(fdt32_t))
+		return 0;
+
+	return fdt32_to_cpu(freq[0]);
+}
+
+/*
  * Check if a node should be skipped during platform population
  */
 static int of_skip_node(const char *name)

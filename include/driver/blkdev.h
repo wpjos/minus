@@ -24,6 +24,8 @@ struct block_device {
 	void			*bd_private;
 	struct dlist_node	bd_list;
 	int			bd_ref_count;
+	uint64_t		bd_start_lba;	/* partition start LBA on parent device */
+	uint64_t		bd_nr_blocks;	/* partition size in blocks (0 = whole device) */
 };
 
 static inline unsigned int block_size(struct block_device *bdev)
@@ -38,6 +40,12 @@ static inline unsigned int block_size(struct block_device *bdev)
 
 /* Legacy major numbers used by Minus */
 #define VIRTBLK_MAJOR	8
+#define MMCBLK_MAJOR	179
+
+/* mmcblk device/partition minor layout: mmcblkN @ N*8, mmcblkNpP @ N*8+P */
+#define MMC_PARTS_PER_DEV	8
+#define MMC_DEV_MINOR(devno)	((devno) * MMC_PARTS_PER_DEV)
+#define MMC_PART_MINOR(devno, partno)	(MMC_DEV_MINOR(devno) + (partno))
 
 void blkdev_init(void);
 
