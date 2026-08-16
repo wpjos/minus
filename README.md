@@ -19,7 +19,10 @@ Just two steps:
 # Step 1: Build the kernel
 make
 
-# Step 2: Run in QEMU (normal mode)
+# Step 2: Prepare rootfs
+sudo dd if=rootfs.ext4 of=/dev/rdisk2s2 bs=1m status=progress
+
+# Step 3: Run in QEMU (normal mode)
 DEBUG=0 sh script/run.sh
 picocom -b 115200 /dev/tty.usbmodem5A980662461
 ```

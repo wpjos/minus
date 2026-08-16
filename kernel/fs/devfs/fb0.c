@@ -80,7 +80,7 @@ static long fb0_mmap(struct file *file, void **addr, size_t length,
 		return -EINVAL;
 
 	ret = vspace_map_contig_phys(vs, info->phys_base, size,
-				  VM_READ | VM_WRITE, &uva);
+				  VM_READ | VM_WRITE | VM_DEVICE, &uva);
 	if (ret < 0)
 		return ret;
 

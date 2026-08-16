@@ -6,5 +6,6 @@ obj-y += block/
 obj-y += console/
 obj-y += fb/
 obj-y += sdhci/
+obj-y += mailbox/
 
 include $(TOPDIR)/scripts/Kbuild.include

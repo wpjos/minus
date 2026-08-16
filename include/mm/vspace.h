@@ -11,6 +11,7 @@ struct page;
 #define VM_READ		(1UL << 0)
 #define VM_WRITE	(1UL << 1)
 #define VM_EXEC		(1UL << 2)
+#define VM_DEVICE	(1UL << 3)
 
 /* Default userspace mmap base: 1 TiB, below 48-bit VA limit, above normal app space. */
 #define USER_MMAP_BASE	0x1000000000ULL

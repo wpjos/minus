@@ -10,6 +10,21 @@ static inline int clip(int v, int min, int max)
 	return v;
 }
 
+static inline int bytes_per_pixel(uint32_t format)
+{
+	return (format == FB_FORMAT_RGB565) ? 2 : 4;
+}
+
+static inline uint16_t color_to_rgb565(uint32_t color)
+{
+	uint8_t r = (color >> 16) & 0xff;
+	uint8_t g = (color >> 8) & 0xff;
+	uint8_t b = color & 0xff;
+	return ((uint16_t)(r & 0xf8) << 8) |
+	       ((uint16_t)(g & 0xfc) << 3) |
+	       (uint16_t)(b >> 3);
+}
+
 void gfx_canvas_init(struct gfx_canvas *cv, const struct fb_info_req *info,
 		     void *pixels)
 {
@@ -22,13 +37,18 @@ void gfx_canvas_init(struct gfx_canvas *cv, const struct fb_info_req *info,
 
 void gfx_set_pixel(struct gfx_canvas *cv, int x, int y, uint32_t color)
 {
-	uint32_t *p;
-
 	if (x < 0 || x >= (int)cv->width || y < 0 || y >= (int)cv->height)
 		return;
 
-	p = (uint32_t *)((char *)cv->pixels + y * cv->stride + x * 4);
-	*p = color;
+	if (cv->format == FB_FORMAT_RGB565) {
+		uint16_t *p = (uint16_t *)((char *)cv->pixels +
+					  y * cv->stride + x * 2);
+		*p = color_to_rgb565(color);
+	} else {
+		uint32_t *p = (uint32_t *)((char *)cv->pixels +
+					  y * cv->stride + x * 4);
+		*p = color;
+	}
 }
 
 void gfx_clear(struct gfx_canvas *cv, uint32_t color)
@@ -50,11 +70,21 @@ void gfx_fill_rect(struct gfx_canvas *cv, int x, int y, int w, int h,
 	if (x1 <= x0 || y1 <= y0)
 		return;
 
-	for (row = y0; row < y1; row++) {
-		uint32_t *p = (uint32_t *)((char *)cv->pixels +
-					   row * cv->stride + x0 * 4);
-		for (col = x0; col < x1; col++)
-			*p++ = color;
+	if (cv->format == FB_FORMAT_RGB565) {
+		uint16_t c = color_to_rgb565(color);
+		for (row = y0; row < y1; row++) {
+			uint16_t *p = (uint16_t *)((char *)cv->pixels +
+						   row * cv->stride + x0 * 2);
+			for (col = x0; col < x1; col++)
+				*p++ = c;
+		}
+	} else {
+		for (row = y0; row < y1; row++) {
+			uint32_t *p = (uint32_t *)((char *)cv->pixels +
+						   row * cv->stride + x0 * 4);
+			for (col = x0; col < x1; col++)
+				*p++ = color;
+		}
 	}
 }
 
@@ -159,14 +189,27 @@ void gfx_blit(struct gfx_canvas *dst, int x, int y,
 	if (w <= 0 || h <= 0)
 		return;
 
-	for (int row = 0; row < h; row++) {
-		uint32_t *s = (uint32_t *)((char *)src->pixels +
-					   (src_y + row) * src->stride +
-					   src_x * 4);
-		uint32_t *d = (uint32_t *)((char *)dst->pixels +
-					   (dst_y + row) * dst->stride +
-					   dst_x * 4);
-		for (int col = 0; col < w; col++)
-			*d++ = *s++;
+	if (dst->format == FB_FORMAT_RGB565) {
+		for (int row = 0; row < h; row++) {
+			uint16_t *s = (uint16_t *)((char *)src->pixels +
+						   (src_y + row) * src->stride +
+						   src_x * 2);
+			uint16_t *d = (uint16_t *)((char *)dst->pixels +
+						   (dst_y + row) * dst->stride +
+						   dst_x * 2);
+			for (int col = 0; col < w; col++)
+				*d++ = *s++;
+		}
+	} else {
+		for (int row = 0; row < h; row++) {
+			uint32_t *s = (uint32_t *)((char *)src->pixels +
+						   (src_y + row) * src->stride +
+						   src_x * 4);
+			uint32_t *d = (uint32_t *)((char *)dst->pixels +
+						   (dst_y + row) * dst->stride +
+						   dst_x * 4);
+			for (int col = 0; col < w; col++)
+				*d++ = *s++;
+		}
 	}
 }

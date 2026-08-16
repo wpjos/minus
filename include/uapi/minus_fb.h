@@ -3,6 +3,10 @@
 
 #include "types.h"
 
+/* Framebuffer pixel formats. */
+#define FB_FORMAT_XRGB8888	0
+#define FB_FORMAT_RGB565	1
+
 /* Framebuffer info returned to userspace. */
 struct fb_info_req {
 	uint32_t width;

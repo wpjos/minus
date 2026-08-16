@@ -93,7 +93,9 @@ int vspace_map_contig_phys(struct vspace *vs, uint64_t phys, size_t size,
 	va = vs->mmap_base;
 	vs->mmap_base += size;
 
-	if (flags & VM_WRITE)
+	if (flags & VM_DEVICE)
+		attr = MMU_REGION_USER_DEVICE;
+	else if (flags & VM_WRITE)
 		attr = MMU_REGION_USER_STACK;
 	else if (flags & VM_EXEC)
 		attr = MMU_REGION_USER_CODE;
