@@ -9,20 +9,21 @@ PLAT          ?= virt
 .DEFAULT_GOAL := all
 
 # 交叉编译器配置（Linux 内核风格）
-CROSS_COMPILE ?= aarch64-elf-
-CC            := $(CROSS_COMPILE)gcc
-LD            := $(CROSS_COMPILE)ld
-OBJCOPY       := $(CROSS_COMPILE)objcopy
-RM            := rm -rf
+export CROSS_COMPILE ?= aarch64-elf-
+export CC            := $(CROSS_COMPILE)gcc
+export LD            := $(CROSS_COMPILE)ld
+export OBJCOPY       := $(CROSS_COMPILE)objcopy
+export AR            := $(CROSS_COMPILE)ar
+export RM            := rm -rf
 
 # 输出目录（所有产物集中存放）
-TOPDIR        := $(CURDIR)
+export TOPDIR := $(CURDIR)
 OUTPUT        := $(TOPDIR)/output
 TARGET        := $(OUTPUT)/kernel.elf
 BIN_TARGET    := $(OUTPUT)/kernel.bin
 DTB_DIR       := $(OUTPUT)/dtb
 ROOTFS_DIR    := $(OUTPUT)/rootfs
-ROOTFS        := $(ROOTFS_DIR)/rootfs.ext4
+export ROOTFS := $(ROOTFS_DIR)/rootfs.ext4
 DTB_SRCS      := $(wildcard $(TOPDIR)/arch/dts/*.dts)
 DTBS          := $(patsubst $(TOPDIR)/arch/dts/%.dts,$(DTB_DIR)/%.dtb,$(DTB_SRCS))
 
@@ -86,9 +87,6 @@ $(TARGET): | prepare
 $(TARGET):
 	@echo "\033[33m[Minus] Starting Kbuild compile...\033[0m"
 	$(MAKE) -f Kbuild \
-	        CC=$(CC) \
-	        LD=$(LD) \
-	        OBJCOPY=${OBJCOPY} \
 	        CFLAGS="$(KBUILD_CFLAGS)" \
 	        CPPFLAGS="$(KBUILD_CPPFLAGS)" \
 	        LDFLAGS="$(KBUILD_LDFLAGS)" \

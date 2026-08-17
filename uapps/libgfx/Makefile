@@ -1,5 +1,3 @@
-CC      := aarch64-elf-gcc
-AR      := aarch64-elf-ar
 CFLAGS  := -ffreestanding -nostdlib -fno-stack-protector -fno-builtin \
            -march=armv8-a -mgeneral-regs-only -O2 -g -Wall -Werror \
            -I$(TOPDIR)/include/base -I$(TOPDIR)/include/uapi -I.

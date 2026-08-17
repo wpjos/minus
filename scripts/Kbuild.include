@@ -38,12 +38,12 @@ $(OUTPUT)/.tmp/%/built-in.o:
 	@if [ -f $(CURDIR)/$*/Kbuild ]; then \
 		$(MAKE) -C $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@) \
 			-f $(CURDIR)/$*/Kbuild \
-			CC=$(CC) CFLAGS="$(CFLAGS) $(ALL_CCFLAGS)" \
+			CFLAGS="$(CFLAGS) $(ALL_CCFLAGS)" \
 			OBJDIR=$(OUTPUT)/.tmp/$* TOPDIR=$(TOPDIR); \
 	else \
 		$(MAKE) -C $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@) \
 			-f $(TOPDIR)/scripts/Kbuild.default \
-			CC=$(CC) CFLAGS="$(CFLAGS) $(ALL_CCFLAGS)" \
+			CFLAGS="$(CFLAGS) $(ALL_CCFLAGS)" \
 			OBJDIR=$(OUTPUT)/.tmp/$* TOPDIR=$(TOPDIR); \
 	fi
 	@mv $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@)/built-in.o $@

@@ -2,8 +2,7 @@
 set -e
 
 SIZE_MB=${1:-64}
-OUT_IMG=${2:-/Users/panhui/minus/output/rootfs/sd-rootfs.ext4}
-TOPDIR=${TOPDIR:-/Users/panhui/minus}
+OUT_IMG=${ROOTFS}
 
 mkdir -p "$(dirname "$OUT_IMG")"
 rm -f "$OUT_IMG"
