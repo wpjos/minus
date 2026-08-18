@@ -19,8 +19,7 @@ int start_kernel(void)
 	mm_init();
 	irq_init();
 
-	task_init();
-	sched_init(task_idle_task());
+	sched_init();
 
 	vfs_init();
 	module_init();

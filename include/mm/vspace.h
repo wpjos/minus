@@ -60,4 +60,11 @@ struct page *vspace_find_page(struct vspace *vs, uintptr_t addr,
 int vspace_map_contig_phys(struct vspace *vs, uint64_t phys, size_t size,
 			   uint32_t flags, uint64_t *uva);
 
+/*
+ * Switch the user page table (TTBR0_EL1) from @prev to @next.
+ * Either argument may be NULL to represent "no user address space" (kernel
+ * thread / idle), in which case TTBR0 is pointed at an empty page table.
+ */
+void switch_vspace(struct vspace *prev, struct vspace *next);
+
 #endif /* __VSPACE_H__ */

@@ -132,6 +132,18 @@ int vspace_map_contig_phys(struct vspace *vs, uint64_t phys, size_t size,
  * vspace_find_page - find the vregion containing @addr and return its backing
  * page plus the offset within that page.
  */
+void switch_vspace(struct vspace *prev, struct vspace *next)
+{
+	if (next == prev)
+		return;
+
+	if (next)
+		mmu_switch_pgd(TTBR0_EL1,
+			       __VA_PA__((uintptr_t)next->pgd));
+	else
+		mmu_clear_ttbr0();
+}
+
 struct page *vspace_find_page(struct vspace *vs, uintptr_t addr,
 			      size_t *offset)
 {

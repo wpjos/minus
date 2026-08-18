@@ -8,19 +8,24 @@
 #include "string.h"
 #include "vfs.h"
 
-static struct task_struct init_task;
+static struct task_struct init_task = {
+	.thread		= { 0 },
+	.se = {
+		.run_node	= DLIST_NODE_INIT(init_task.se.run_node),
+		.time_slice	= SCHED_SLICE_TICKS,
+		.priority	= SCHED_PRIO_IDLE,
+	},
+	.state		= TASK_RUNNING,
+	.pid		= 0,
+	.name		= "idle",
+	.vspace		= NULL,
+	.files		= NULL,
+	.pt_regs	= NULL,
+};
+
 static int next_pid = 1;
 
-void task_init(void)
-{
-	memset(&init_task, 0, sizeof(init_task));
-	init_task.pid = 0;
-	init_task.state = TASK_RUNNING;
-	strncpy(init_task.name, "idle", sizeof(init_task.name) - 1);
-	dlist_init(&init_task.se.run_node);
-	init_task.vspace = NULL;
-	init_task.files = alloc_files_struct();
-}
+struct task_struct *current = &init_task;
 
 static void task_init_identity(struct task_struct *task, const char *name)
 {
@@ -28,6 +33,7 @@ static void task_init_identity(struct task_struct *task, const char *name)
 	strncpy(task->name, name, sizeof(task->name) - 1);
 	task->state = TASK_INIT;
 	dlist_init(&task->se.run_node);
+	task->se.priority = SCHED_PRIO_DEFAULT;
 }
 
 /*
@@ -68,9 +74,4 @@ void task_free(struct task_struct *task)
 	vspace_free(task->vspace);
 	kfree(task->files);
 	kfree(task);
-}
-
-struct task_struct *task_idle_task(void)
-{
-	return &init_task;
 }

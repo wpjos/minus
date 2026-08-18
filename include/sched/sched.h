@@ -4,14 +4,25 @@
 #include "types.h"
 #include "dlist.h"
 
+/* Number of timer ticks a task may run before being preempted. */
+#define SCHED_SLICE_TICKS	10
+
+/* Number of priority levels in the run queue.  Lower numeric value = higher priority. */
+#define SCHED_PRIO_MAX		32
+
+#define SCHED_PRIO_DEFAULT	20
+#define SCHED_PRIO_IDLE		(SCHED_PRIO_MAX - 1)
+
+
 /*
  * Scheduling entity.
  * The scheduler manipulates this structure only; it does not care about
  * the rest of the task state.  Embedded inside struct task_struct.
  */
 struct sched_entity {
-	struct dlist_node run_node;
+	struct dlist_node run_node;	/* linked into one of the per-prio queues */
 	unsigned int time_slice;	/* ticks remaining in this quantum */
+	unsigned int priority;		/* 0 = highest, SCHED_MAX_PRIO-1 = lowest */
 };
 
 /* Forward declaration: execution entity lives in task.h. */
@@ -20,13 +31,13 @@ struct task_struct;
 /* Currently running task on this CPU. */
 extern struct task_struct *current;
 
-void sched_init(struct task_struct *idle_task);
 void schedule(void);
 void scheduler_tick(void);
 void finish_task_switch(struct task_struct *prev);
 void schedule_if_needed(void);
 
 /* Add/remove tasks from the run queue. */
+void sched_init(void);
 void sched_enqueue(struct task_struct *task);
 void sched_dequeue(struct task_struct *task);
 struct task_struct *sched_pick_next(void);

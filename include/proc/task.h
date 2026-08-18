@@ -64,7 +64,4 @@ struct task_struct *task_alloc(const char *name);
 
 void task_free(struct task_struct *task);
 
-/* idle task setup for the scheduler. */
-struct task_struct *task_idle_task(void);
-
 #endif /* __TASK_H__ */

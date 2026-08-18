@@ -13,6 +13,9 @@ void dlist_add_tail(struct dlist_node *head, struct dlist_node *node);
 void dlist_del(struct dlist_node *node);
 void dlist_init(struct dlist_node *node);
 
+/* Static initializer for an empty dlist node that points to itself. */
+#define DLIST_NODE_INIT(name) { .prev = &(name), .next = &(name) }
+
 #define dlist_empty(head)	((head)->next == (head))
 
 #define dlist_first_entry(head, type, member) \

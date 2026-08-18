@@ -5,25 +5,32 @@
 #include "memory.h"
 #include "irqflags.h"
 
-/* Number of timer ticks a task may run before being preempted. */
-#define SCHED_SLICE_TICKS	10
+/* Per-priority FIFO run queues.  Index 0 is highest priority. */
+static struct dlist_node run_queue[SCHED_PRIO_MAX];
+static struct dlist_node dead_tasks = DLIST_NODE_INIT(dead_tasks);
 
-struct task_struct *current;
-static struct dlist_node run_queue;
-static struct dlist_node dead_tasks;
-static struct task_struct *idle_task;
-
-void sched_init(struct task_struct *idle_task_arg)
+static int runqueue_empty(void)
 {
-	dlist_init(&run_queue);
-	dlist_init(&dead_tasks);
-	current = idle_task_arg;
-	idle_task = idle_task_arg;
+	unsigned int prio;
+
+	for (prio = 0; prio < SCHED_PRIO_MAX; prio++)
+		if (!dlist_empty(&run_queue[prio]))
+			return 0;
+	return 1;
+}
+
+void sched_init(void)
+{
+	unsigned int prio;
+
+	for (prio = 0; prio < SCHED_PRIO_MAX; prio++)
+		dlist_init(&run_queue[prio]);
 }
 
 void sched_enqueue(struct task_struct *task)
 {
 	uint32_t flags;
+	unsigned int prio;
 
 	local_irq_save(flags);
 
@@ -38,9 +45,10 @@ void sched_enqueue(struct task_struct *task)
 		return;
 	}
 
+	prio = task->se.priority;
 	task->state = TASK_READY;
 	task->se.time_slice = SCHED_SLICE_TICKS;
-	dlist_add_tail(&run_queue, &task->se.run_node);
+	dlist_add_tail(&run_queue[prio], &task->se.run_node);
 	local_irq_restore(flags);
 }
 
@@ -71,15 +79,20 @@ out:
 
 struct task_struct *sched_pick_next(void)
 {
-	if (dlist_empty(&run_queue))
-		return NULL;
-	return dlist_first_entry(&run_queue, struct task_struct, se.run_node);
+	unsigned int prio;
+
+	for (prio = 0; prio < SCHED_PRIO_MAX; prio++) {
+		if (!dlist_empty(&run_queue[prio]))
+			return dlist_first_entry(&run_queue[prio],
+						 struct task_struct, se.run_node);
+	}
+	return NULL;
 }
 
 void scheduler_tick(void)
 {
-	/* No point preempting the only runnable task. */
-	if (dlist_empty(&run_queue))
+	/* No point preempting if there is no other runnable task. */
+	if (runqueue_empty())
 		return;
 
 	if (current->se.time_slice > 0) {
@@ -141,40 +154,26 @@ void schedule(void)
 
 	local_irq_save(flags);
 
-	next = sched_pick_next();
-	if (!next)
-		next = idle_task;
+	/*
+	 * Take prev out of the run queue and, if it is still runnable, put it
+	 * at the tail of its priority queue.  This guarantees round-robin among
+	 * tasks of the same priority.
+	 */
+	sched_dequeue(prev);
+	if (prev->state == TASK_RUNNING)
+		sched_enqueue(prev);
 
+	next = sched_pick_next();
+	sched_dequeue(next);
 	next->state = TASK_RUNNING;
 	next->need_resched = 0;
+
 	if (prev == next) {
-		/* No other runnable task: keep running but recharge the slice. */
-		prev->se.time_slice = SCHED_SLICE_TICKS;
 		local_irq_restore(flags);
 		return;
 	}
 
-	sched_dequeue(next);
-
-	/* Put the outgoing task back if it is still runnable. */
-	if (prev->state == TASK_RUNNING)
-		sched_enqueue(prev);
-
-	/* Switch user page tables, or clear TTBR0 when entering idle/kernel mode. */
-	if (next->vspace) {
-		if (next->vspace != prev->vspace)
-			mmu_switch_pgd(TTBR0_EL1,
-				       __VA_PA__((uintptr_t)next->vspace->pgd));
-	} else if (prev->vspace) {
-		mmu_clear_ttbr0();
-	}
-
-	/*
-	 * switch_to() returns the task we switched away from.  After the stack
-	 * switch we are running on 'next' context, so it is safe to free 'prev'
-	 * if it has exited - but we only queue it here and release memory after
-	 * re-enabling interrupts.
-	 */
+	switch_vspace(prev->vspace, next->vspace);
 	prev = switch_to(prev, next);
 	finish_task_switch(prev);
 
