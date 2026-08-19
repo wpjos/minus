@@ -65,25 +65,31 @@ static struct inode *devfs_new_console_inode(struct super_block *sb)
 	return inode;
 }
 
-static struct dentry *devfs_lookup(struct inode *dir, struct dentry *dentry)
+static int devfs_lookup(struct inode *dir, struct dentry *dentry,
+			struct dentry **found)
 {
 	struct inode *inode;
 
 	(void)dir;
+
+	if (!found)
+		return -EINVAL;
 
 	if (strcmp(dentry->d_name, "console") == 0) {
 		inode = devfs_new_console_inode(dir->i_sb);
 	} else if (strcmp(dentry->d_name, "fb0") == 0) {
 		inode = devfs_new_fb0_inode(dir->i_sb);
 	} else {
-		return NULL;
+		*found = NULL;
+		return 0;
 	}
 
 	if (!inode)
-		return NULL;
+		return -ENOMEM;
 
 	d_instantiate(dentry, inode);
-	return dentry;
+	*found = dentry;
+	return 0;
 }
 
 static long devfs_iterate(struct file *file, struct dir_context *ctx)

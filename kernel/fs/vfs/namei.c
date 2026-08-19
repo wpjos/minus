@@ -6,13 +6,14 @@
 #include "task.h"
 #include "stat.h"
 
-struct dentry *lookup_one_len(const char *name, struct dentry *base, int len)
+int lookup_one_len(const char *name, struct dentry *base, int len,
+		   struct dentry **out)
 {
 	struct dentry *dentry;
 	char tmp[64];
 
-	if (!base || !name)
-		return NULL;
+	if (!base || !name || !out)
+		return -EINVAL;
 
 	if (len >= (int)sizeof(tmp))
 		len = (int)sizeof(tmp) - 1;
@@ -20,28 +21,33 @@ struct dentry *lookup_one_len(const char *name, struct dentry *base, int len)
 	tmp[len] = '\0';
 
 	dentry = d_lookup(base, tmp);
-	if (dentry)
-		return dentry;
+	if (dentry) {
+		*out = dentry;
+		return 0;
+	}
 
 	dentry = d_alloc(base, tmp);
 	if (!dentry)
-		return NULL;
+		return -ENOMEM;
 
 	if (base->d_inode && base->d_inode->i_op &&
 	    base->d_inode->i_op->lookup) {
 		struct dentry *found;
+		int ret;
 
-		found = base->d_inode->i_op->lookup(base->d_inode, dentry);
-		if (!found) {
+		ret = base->d_inode->i_op->lookup(base->d_inode, dentry, &found);
+		if (ret < 0) {
 			dput(dentry);
-			return NULL;
+			return ret;
 		}
 		if (found != dentry)
 			dput(dentry);
-		return found;
+		*out = found;
+		return 0;
 	}
 
-	return dentry;
+	*out = dentry;
+	return 0;
 }
 
 static int follow_path(const char *path, struct path *path_out)
@@ -51,6 +57,7 @@ static int follow_path(const char *path, struct path *path_out)
 	const char *p;
 	char comp[64];
 	int i;
+	int ret;
 
 	if (!path || !path_out)
 		return -EINVAL;
@@ -129,7 +136,12 @@ static int follow_path(const char *path, struct path *path_out)
 			continue;
 		}
 
-		next = lookup_one_len(comp, dentry, i);
+		next = NULL;
+		ret = lookup_one_len(comp, dentry, i, &next);
+		if (ret < 0) {
+			dput(dentry);
+			return ret;
+		}
 		if (!next) {
 			dput(dentry);
 			return -ENOENT;
@@ -211,7 +223,12 @@ int vfs_do_unlink(const char *pathname)
 		return -ENOTDIR;
 	}
 
-	dentry = lookup_one_len(name, p.dentry, strlen(name));
+	dentry = NULL;
+	ret = lookup_one_len(name, p.dentry, strlen(name), &dentry);
+	if (ret < 0) {
+		dput(p.dentry);
+		return ret;
+	}
 	if (!dentry) {
 		dput(p.dentry);
 		return -ENOENT;
@@ -296,7 +313,12 @@ int vfs_do_rmdir(const char *pathname)
 		return -ENOTDIR;
 	}
 
-	dentry = lookup_one_len(name, p.dentry, strlen(name));
+	dentry = NULL;
+	ret = lookup_one_len(name, p.dentry, strlen(name), &dentry);
+	if (ret < 0) {
+		dput(p.dentry);
+		return ret;
+	}
 	if (!dentry) {
 		dput(p.dentry);
 		return -ENOENT;

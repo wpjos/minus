@@ -14,7 +14,8 @@ struct vfsmount {
 	struct dlist_node mnt_list;
 };
 
-struct vfsmount *kern_mount(struct file_system_type *fs, const char *dev_name);
+int kern_mount(struct file_system_type *fs, const char *dev_name,
+	       struct vfsmount **out);
 
 void vfs_mount_init(void);
 

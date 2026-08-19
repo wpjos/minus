@@ -2,6 +2,7 @@
 #include "string.h"
 #include "printk.h"
 #include "bitops.h"
+#include "errno.h"
 
 /* SD command indices */
 #define CMD0	0
@@ -48,7 +49,7 @@ static int sd_app_cmd(struct sdhci_host *host, uint32_t rca)
 
 	/* app_cmd bit (bit 5) should be set */
 	if ((resp & 0x20) == 0)
-		return -1;
+		return -EIO;
 
 	return 0;
 }
@@ -63,7 +64,7 @@ static int sd_cmd8(struct sdhci_host *host)
 		return ret;
 
 	if ((resp & 0xff) != (CMD8_ARG & 0xff))
-		return -1;
+		return -EIO;
 
 	return 0;
 }
@@ -92,7 +93,7 @@ static int sd_acmd41(struct sdhci_host *host)
 		sdhci_udelay(1000);
 	}
 
-	return -1;
+	return -ETIMEDOUT;
 }
 
 static int sd_cmd2(struct sdhci_host *host, uint32_t *cid)
@@ -183,14 +184,13 @@ static int sd_switch_hs(struct sdhci_host *host)
 	if (ret < 0)
 		goto out;
 
-	if (sdhci_transfer_pio(host, switch_status, sizeof(switch_status), 0) < 0) {
-		ret = -1;
+	ret = sdhci_transfer_pio(host, switch_status, sizeof(switch_status), 0);
+	if (ret < 0)
 		goto out;
-	}
 
 	/* Check if high-speed function is supported */
 	if (((switch_status[4] >> 24) & 0xf) != 0x1) {
-		ret = -1;
+		ret = -ENOTSUP;
 		goto out;
 	}
 
@@ -208,13 +208,13 @@ static int sd_switch_hs(struct sdhci_host *host)
 
 	/* verify function switched */
 	if (((switch_status[4] >> 24) & 0xf) != 0x1) {
-		ret = -1;
+		ret = -EIO;
 		goto out;
 	}
 
 	for (i = 0; i < 4; i++) {
 		if (((switch_status[3] >> (i * 4)) & 0xf) != 0x1) {
-			ret = -1;
+			ret = -EIO;
 			goto out;
 		}
 	}
@@ -238,7 +238,7 @@ int sd_card_init(struct sdhci_host *host)
 	state = sdhci_readl(host, SDHCI_PRESENT_STATE);
 	if (!(state & SDHCI_CARD_PRESENT)) {
 		printk("sd: no card present\n");
-		return -1;
+		return -ENODEV;
 	}
 
 	/* wait for card stable */
@@ -357,11 +357,11 @@ static int sd_send_data_cmd(struct sdhci_host *host, uint8_t cmd,
 	int ret;
 
 	if (nr_blocks == 0)
-		return -1;
+		return -EINVAL;
 
 	/* wait for data line free */
 	if (sdhci_wait_inhibit(host, SDHCI_DAT_INHIBIT, 100000) < 0)
-		return -1;
+		return -ETIMEDOUT;
 
 	mode = SDHCI_TRNS_BLK_CNT_EN;
 	if (nr_blocks > 1)
@@ -411,7 +411,7 @@ int sd_read_blocks(struct sdhci_host *host, uint64_t lba, size_t nr_blocks,
 	uint32_t arg;
 
 	if (host->ioaddr == NULL || buf == NULL)
-		return -1;
+		return -EINVAL;
 
 	cmd = (nr_blocks > 1) ? CMD18 : CMD17;
 	arg = host->high_capacity ? (uint32_t)lba : (uint32_t)(lba * 512);
@@ -426,7 +426,7 @@ int sd_write_blocks(struct sdhci_host *host, uint64_t lba, size_t nr_blocks,
 	uint32_t arg;
 
 	if (host->ioaddr == NULL || buf == NULL)
-		return -1;
+		return -EINVAL;
 
 	cmd = (nr_blocks > 1) ? CMD25 : CMD24;
 	arg = host->high_capacity ? (uint32_t)lba : (uint32_t)(lba * 512);

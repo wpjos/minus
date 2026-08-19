@@ -36,4 +36,8 @@
 #define ENOSYS		38
 #define ENOTEMPTY	39
 
+/* Driver / device errors */
+#define ETIMEDOUT	110
+#define ENOTSUP		95
+
 #endif /* __ERRNO_H__ */

@@ -7,6 +7,7 @@
 #include "bitops.h"
 #include "memory.h"
 #include "module.h"
+#include "errno.h"
 
 struct virtio_blk {
 	struct virtio_device *vdev;
@@ -34,11 +35,11 @@ static int virtio_blk_request(struct block_device *bdev, uint64_t lba,
 	uint64_t sector;
 
 	if (!vdev)
-		return -1;
+		return -EINVAL;
 
 	req = (struct virtio_blk_req *)kmalloc(sizeof(*req));
 	if (!req)
-		return -1;
+		return -ENOMEM;
 
 	sector = lba * (bdev->bd_block_size / 512);
 
@@ -67,7 +68,7 @@ static int virtio_blk_request(struct block_device *bdev, uint64_t lba,
 	ret = virtio_add_buf(vdev, desc, 3, req);
 	if (ret < 0) {
 		kfree(req);
-		return -1;
+		return ret;
 	}
 
 	virtio_mmio_notify(vdev, 0);
@@ -79,7 +80,7 @@ static int virtio_blk_request(struct block_device *bdev, uint64_t lba,
 			req->done = 1;
 	}
 
-	ret = (req->status == VIRTIO_BLK_S_OK) ? 0 : -1;
+	ret = (req->status == VIRTIO_BLK_S_OK) ? 0 : -EIO;
 	kfree(req);
 	return ret;
 }
@@ -101,7 +102,7 @@ static int virtio_blk_probe(struct virtio_device *vdev)
 
 	ret = virtio_mmio_setup_queue(vdev, 0, VIRTIO_BLK_QUEUE_SIZE);
 	if (ret < 0)
-		return -1;
+		return ret;
 
 	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_DRIVER_OK);
 	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_STARTED);
@@ -110,7 +111,7 @@ static int virtio_blk_probe(struct virtio_device *vdev)
 
 	vblk = (struct virtio_blk *)kmalloc(sizeof(*vblk));
 	if (!vblk)
-		return -1;
+		return -ENOMEM;
 	memset(vblk, 0, sizeof(*vblk));
 
 	vblk->vdev = vdev;
@@ -124,13 +125,14 @@ static int virtio_blk_probe(struct virtio_device *vdev)
 
 	if (register_blkdev(VIRTBLK_MAJOR, "virtblk", &virtio_blk_ops) != 0) {
 		kfree(vblk);
-		return -1;
+		return -EEXIST;
 	}
 
-	if (add_block_device(&vblk->bdev) != 0) {
+	ret = add_block_device(&vblk->bdev);
+	if (ret != 0) {
 		unregister_blkdev(VIRTBLK_MAJOR);
 		kfree(vblk);
-		return -1;
+		return ret;
 	}
 
 	return 0;

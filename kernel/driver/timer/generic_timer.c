@@ -6,6 +6,7 @@
 #include "generic_timer.h"
 #include "sched.h"
 #include "task.h"
+#include "errno.h"
 
 /* Tick interval in milliseconds */
 #define TICK_MS		10
@@ -41,19 +42,19 @@ static int generic_timer_probe(struct platform_device *pdev)
 	freq = generic_timer_get_cntfrq();
 	if (freq == 0) {
 		printk("generic_timer: CNTFRQ is zero\n");
-		return -1;
+		return -ENODEV;
 	}
 
 	/* Use the non-secure EL1 physical timer PPI (second interrupt cell) */
 	g_timer_irq = (unsigned int)platform_get_irq(pdev, 1);
 	if (g_timer_irq == 0) {
 		printk("generic_timer: no IRQ resource\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	if (request_irq(g_timer_irq, generic_timer_tick_handler, NULL) != 0) {
 		printk("generic_timer: failed to register IRQ %u\n", g_timer_irq);
-		return -1;
+		return -EINVAL;
 	}
 
 	/* Calculate tick count for TICK_MS */
@@ -65,7 +66,7 @@ static int generic_timer_probe(struct platform_device *pdev)
 
 	if (enable_irq(g_timer_irq) != 0) {
 		printk("generic_timer: failed to enable IRQ %u\n", g_timer_irq);
-		return -1;
+		return -EINVAL;
 	}
 
 	printk("generic_timer: freq=%d Hz, irq=%u, interval=%d\n",

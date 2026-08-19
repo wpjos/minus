@@ -265,7 +265,8 @@ int ext4_set_block(struct inode *inode, uint32_t iblock, uint64_t pblock);
 int ext4_truncate_blocks(struct inode *inode);
 
 /* dir.c */
-struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry);
+int ext4_lookup(struct inode *dir, struct dentry *dentry,
+		struct dentry **found);
 int ext4_add_entry(struct inode *dir, const char *name, int len,
 		   uint32_t ino, uint8_t file_type);
 int ext4_delete_entry(struct inode *dir, const char *name, int len);

@@ -11,16 +11,16 @@ struct kmem_cache *g_ext4_inode_cache;
 static int ext4_check_superblock(struct ext4_super_block *es)
 {
 	if (le16_to_cpu(es->s_magic) != EXT4_SUPER_MAGIC) {
-		return -1;
+		return -EINVAL;
 	}
 
 	if (le32_to_cpu(es->s_feature_incompat) & EXT4_FEATURE_INCOMPAT_64BIT) {
-		return -1;
+		return -EINVAL;
 	}
 
 	if (!(le32_to_cpu(es->s_feature_incompat) &
 	      EXT4_FEATURE_INCOMPAT_EXTENTS)) {
-		return -1;
+		return -EINVAL;
 	}
 
 	return 0;
@@ -84,7 +84,7 @@ static int ext4_fill_super(struct super_block *sb)
 			       EXT4_SUPERBLOCK_SIZE / sb->s_bdev->bd_block_size,
 			       super_buf);
 	if (ret < 0)
-		return -1;
+		return ret;
 
 	es = (struct ext4_super_block *)(super_buf + (EXT4_SUPERBLOCK_OFFSET % sb->s_bdev->bd_block_size));
 	block_size = 1024 << le32_to_cpu(es->s_log_block_size);
@@ -100,7 +100,7 @@ static int ext4_fill_super(struct super_block *sb)
 
 	bh = sb_bread(sb, superblock_block);
 	if (!bh)
-		return -1;
+		return -EIO;
 
 	es = (struct ext4_super_block *)(bh->b_data + superblock_off);
 	ret = ext4_check_superblock(es);
@@ -109,7 +109,7 @@ static int ext4_fill_super(struct super_block *sb)
 
 	sbi = ext4_alloc_sbi(es);
 	if (!sbi)
-		return -1;
+		return -ENOMEM;
 
 	sb->s_blocksize = block_size;
 	sb->s_blocksize_bits = 10 + sbi->s_log_block_size;
@@ -120,13 +120,13 @@ static int ext4_fill_super(struct super_block *sb)
 	sbi->s_group_desc = (struct buffer_head **)kmalloc(
 		gd_blocks * sizeof(struct buffer_head *));
 	if (!sbi->s_group_desc)
-		return -1;
+		return -ENOMEM;
 
 	for (i = 0; i < gd_blocks; i++) {
 		uint32_t blk = sbi->s_first_data_block + 1 + i;
 		sbi->s_group_desc[i] = sb_bread(sb, blk);
 		if (!sbi->s_group_desc[i])
-			return -1;
+			return -EIO;
 	}
 
 	g_ext4_inode_cache = kmem_cache_create("ext4_inode_info",
@@ -134,11 +134,11 @@ static int ext4_fill_super(struct super_block *sb)
 
 	root_inode = ext4_iget(sb, EXT4_ROOT_INO);
 	if (!root_inode)
-		return -1;
+		return -EIO;
 
 	root_dentry = d_alloc(NULL, "/");
 	if (!root_dentry)
-		return -1;
+		return -ENOMEM;
 	d_instantiate(root_dentry, root_inode);
 	sb->s_root = root_dentry;
 

@@ -1,12 +1,13 @@
 #include "fb.h"
 #include "string.h"
+#include "errno.h"
 
 static struct fb_info *g_fb_info;
 
 int fb_register(struct fb_info *info)
 {
 	if (!info)
-		return -1;
+		return -EINVAL;
 	g_fb_info = info;
 	return 0;
 }

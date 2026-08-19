@@ -6,6 +6,7 @@
 #include "mm.h"
 #include "slab.h"
 #include "memory.h"
+#include "errno.h"
 
 #define MAX_PLATFORM_DEVICES	64
 
@@ -88,7 +89,7 @@ static int of_translate_address(const void *fdt, int nodeoffset,
 		int grandparent;
 
 		if (parent < 0)
-			return -1;
+			return -ENOENT;
 
 		grandparent = fdt_parent_offset(fdt, parent);
 		if (grandparent < 0) {
@@ -108,11 +109,11 @@ static int of_translate_address(const void *fdt, int nodeoffset,
 			int matched = 0;
 
 			if (ac < 0 || sc < 0 || pac < 0)
-				return -1;
+				return -EINVAL;
 
 			ranges = fdt_getprop(fdt, parent, "ranges", &len);
 			if (!ranges)
-				return -1;
+				return -ENOENT;
 
 			if (len == 0) {
 				/* empty "ranges;" means 1:1, continue upward */
@@ -122,7 +123,7 @@ static int of_translate_address(const void *fdt, int nodeoffset,
 
 			entry_cells = ac + pac + sc;
 			if (len < entry_cells * (int)sizeof(fdt32_t))
-				return -1;
+				return -EINVAL;
 
 			n = len / (entry_cells * sizeof(fdt32_t));
 			for (i = 0; i < n; i++) {
@@ -140,7 +141,7 @@ static int of_translate_address(const void *fdt, int nodeoffset,
 			}
 
 			if (!matched)
-				return -1;
+				return -EINVAL;
 		}
 
 		nodeoffset = parent;
@@ -163,23 +164,26 @@ int of_get_address_resource(const void *fdt, int nodeoffset, int parent,
 	ac = fdt_address_cells(fdt, parent);
 	sc = fdt_size_cells(fdt, parent);
 	if (ac < 0 || sc < 0)
-		return -1;
+		return -EINVAL;
 
 	prop = fdt_getprop(fdt, nodeoffset, "reg", &len);
 	if (!prop)
-		return -1;
+		return -ENOENT;
 
 	entry_cells = ac + sc;
 	if (len < (index + 1) * entry_cells * (int)sizeof(fdt32_t))
-		return -1;
+		return -EINVAL;
 
 	offset = index * entry_cells;
 
 	addr = of_read_cells(prop + offset, ac);
 	size = of_read_cells(prop + offset + ac, sc);
 
-	if (of_translate_address(fdt, nodeoffset, addr, &addr) < 0)
-		return -1;
+	{
+		int ret = of_translate_address(fdt, nodeoffset, addr, &addr);
+		if (ret < 0)
+			return ret;
+	}
 
 	res->start = addr;
 	res->end = addr + size - 1;
@@ -254,11 +258,11 @@ static int of_get_interrupt_cells(const void *fdt, int intc)
 	int len;
 
 	if (intc < 0)
-		return -1;
+		return -EINVAL;
 
 	prop = fdt_getprop(fdt, intc, "#interrupt-cells", &len);
 	if (!prop || len < (int)sizeof(fdt32_t))
-		return -1;
+		return -EINVAL;
 
 	return (int)fdt32_to_cpu(prop[0]);
 }
@@ -274,7 +278,7 @@ static int of_irq_from_cells(const fdt32_t *cells, int nr_cells)
 	uint32_t type, irq;
 
 	if (nr_cells <= 0)
-		return -1;
+		return -EINVAL;
 
 	if (nr_cells == 1)
 		return (int)fdt32_to_cpu(cells[0]);
@@ -290,7 +294,7 @@ static int of_irq_from_cells(const fdt32_t *cells, int nr_cells)
 	case 2: /* SGI */
 		return (int)irq;
 	default:
-		return -1;
+		return -EINVAL;
 	}
 }
 
@@ -308,22 +312,22 @@ int of_get_irq_resource(const void *fdt, int nodeoffset, int index,
 
 	intc = of_find_interrupt_parent(fdt, nodeoffset);
 	if (intc < 0)
-		return -1;
+		return -ENOENT;
 
 	icells = of_get_interrupt_cells(fdt, intc);
 	if (icells < 0)
-		return -1;
+		return -EINVAL;
 
 	prop = fdt_getprop(fdt, nodeoffset, "interrupts", &len);
 	if (!prop)
-		return -1;
+		return -ENOENT;
 
 	if (len < (index + 1) * icells * (int)sizeof(fdt32_t))
-		return -1;
+		return -EINVAL;
 
 	irq = of_irq_from_cells(prop + index * icells, icells);
 	if (irq < 0)
-		return -1;
+		return irq;
 
 	res->start = (uint64_t)irq;
 	res->end = (uint64_t)irq;

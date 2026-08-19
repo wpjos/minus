@@ -1,12 +1,13 @@
 #include "device.h"
 #include "dlist.h"
+#include "errno.h"
 
 int driver_register(struct driver *drv)
 {
 	struct device *dev;
 
 	if (!drv || !drv->bus)
-		return -1;
+		return -EINVAL;
 
 	dlist_add(&drv->bus->drivers, &drv->node);
 

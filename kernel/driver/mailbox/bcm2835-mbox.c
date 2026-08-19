@@ -8,6 +8,7 @@
 #include "string.h"
 #include "irqflags.h"
 #include "memory.h"
+#include "errno.h"
 
 /* BCM2835-style mailbox register offsets */
 #define MAILBOX_READ		0x00
@@ -57,7 +58,7 @@ static int mbox_write(uint32_t data)
 	}
 	if (i == MBOX_POLL_LOOPS) {
 		printk("bcm2835-mbox: write timeout\n");
-		return -1;
+		return -ETIMEDOUT;
 	}
 
 	mbox_writel(MAILBOX_WRITE, data);
@@ -75,13 +76,13 @@ static int mbox_read(uint32_t *data)
 	}
 	if (i == MBOX_POLL_LOOPS) {
 		printk("bcm2835-mbox: read timeout\n");
-		return -1;
+		return -ETIMEDOUT;
 	}
 
 	val = mbox_readl(MAILBOX_READ);
 	if ((val & 0xf) != MAILBOX_CHANNEL_PROP) {
 		printk("bcm2835-mbox: unexpected channel %u\n", val & 0xf);
-		return -1;
+		return -EIO;
 	}
 
 	*data = val & ~0xf;
@@ -102,7 +103,7 @@ int rpi_firmware_property(void *buf, size_t size)
 	int ret;
 
 	if (!g_mbox_base || !buf)
-		return -1;
+		return -EINVAL;
 
 	/*
 	 * Ensure the property buffer is written back to memory before the GPU
@@ -114,7 +115,7 @@ int rpi_firmware_property(void *buf, size_t size)
 	bus_addr = __VA_PA__((uintptr_t)buf);
 	if (bus_addr & 0xf) {
 		printk("bcm2835-mbox: buffer not 16-byte aligned\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	local_irq_save(flags);
@@ -135,7 +136,7 @@ int rpi_firmware_property(void *buf, size_t size)
 		printk("bcm2835-mbox: response address mismatch %p vs %p\n",
 		       (void *)(unsigned long long)resp_addr,
 		       (void *)(unsigned long long)bus_addr);
-		ret = -1;
+		ret = -EINVAL;
 		goto out;
 	}
 
@@ -154,13 +155,13 @@ static int bcm2835_mbox_probe(struct platform_device *pdev)
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		printk("bcm2835-mbox: missing memory resource\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	g_mbox_base = mmu_ioremap(res->start, resource_size(res));
 	if (!g_mbox_base) {
 		printk("bcm2835-mbox: ioremap failed\n");
-		return -1;
+		return -ENOMEM;
 	}
 
 	printk("bcm2835-mbox: probed at %p\n", g_mbox_base);

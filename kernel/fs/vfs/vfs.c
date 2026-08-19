@@ -30,11 +30,11 @@ int register_filesystem(struct file_system_type *fs)
 	struct file_system_type **p;
 
 	if (!fs || !fs->name || !fs->mount)
-		return -1;
+		return -EINVAL;
 
 	for (p = &g_fs_types; *p; p = &(*p)->next) {
 		if (strcmp((*p)->name, fs->name) == 0)
-			return -1;
+			return -EEXIST;
 	}
 
 	fs->next = NULL;
@@ -73,27 +73,27 @@ struct super_block *sb_alloc(struct file_system_type *type)
 
 /* File handle helpers. */
 
-struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt,
-			 int flags)
+int dentry_open(struct dentry *dentry, struct vfsmount *mnt,
+		int flags, struct file **out)
 {
 	struct file *file;
 	struct inode *inode;
 	int ret;
 
-	if (!dentry)
-		return NULL;
+	if (!dentry || !out)
+		return -EINVAL;
 
 	dget(dentry);
 	inode = dentry->d_inode;
 	if (!inode) {
 		dput(dentry);
-		return NULL;
+		return -ENOENT;
 	}
 
 	file = (struct file *)kmalloc(sizeof(*file));
 	if (!file) {
 		dput(dentry);
-		return NULL;
+		return -ENOMEM;
 	}
 	memset(file, 0, sizeof(*file));
 
@@ -109,14 +109,16 @@ struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt,
 		if (ret < 0) {
 			kfree(file);
 			dput(dentry);
-			return NULL;
+			return ret;
 		}
 	}
 
-	return file;
+	*out = file;
+	return 0;
 }
 
-static struct file *vfs_create(const char *pathname, int flags, uint16_t mode)
+static int vfs_create(const char *pathname, int flags, uint16_t mode,
+		      struct file **out)
 {
 	char parent_path[256];
 	char name[64];
@@ -125,63 +127,78 @@ static struct file *vfs_create(const char *pathname, int flags, uint16_t mode)
 	struct file *file = NULL;
 	int ret;
 
+	if (!out)
+		return -EINVAL;
+
 	ret = split_last_component(pathname, parent_path, sizeof(parent_path),
 				   name, sizeof(name));
 	if (ret < 0)
-		return NULL;
+		return ret;
 
 	ret = vfs_path_lookup(parent_path, &p);
 	if (ret < 0)
-		return NULL;
+		return ret;
 
-	if (!S_ISDIR(p.dentry->d_inode->i_mode))
-		goto out_parent;
+	if (!S_ISDIR(p.dentry->d_inode->i_mode)) {
+		dput(p.dentry);
+		return -ENOTDIR;
+	}
 
 	dentry = d_alloc(p.dentry, name);
-	if (!dentry)
-		goto out_parent;
+	if (!dentry) {
+		dput(p.dentry);
+		return -ENOMEM;
+	}
 
 	if (dentry->d_inode) {
 		dput(dentry);
-		goto out_parent;
+		dput(p.dentry);
+		return -EEXIST;
 	}
 
 	if (!p.dentry->d_inode->i_op ||
 	    !p.dentry->d_inode->i_op->create) {
 		dput(dentry);
-		goto out_parent;
+		dput(p.dentry);
+		return -EPERM;
 	}
 
 	ret = p.dentry->d_inode->i_op->create(p.dentry->d_inode, dentry, mode);
 	if (ret < 0) {
 		dput(dentry);
-		goto out_parent;
+		dput(p.dentry);
+		return ret;
 	}
 
-	file = dentry_open(dentry, p.mnt, flags);
+	ret = dentry_open(dentry, p.mnt, flags, &file);
 	dput(dentry);
-
-out_parent:
 	dput(p.dentry);
-	return file;
+	if (ret < 0)
+		return ret;
+
+	*out = file;
+	return 0;
 }
 
-struct file *vfs_open(const char *path, int flags, uint16_t mode)
+int vfs_open(const char *path, int flags, uint16_t mode, struct file **out)
 {
 	struct path p;
-	struct file *file;
+	struct file *file = NULL;
 	int ret;
+
+	if (!out)
+		return -EINVAL;
 
 	ret = vfs_path_lookup(path, &p);
 	if (ret < 0) {
 		if ((flags & O_CREAT) && ret == -ENOENT)
-			return vfs_create(path, flags, mode);
-		return NULL;
+			return vfs_create(path, flags, mode, out);
+		return ret;
 	}
 
 	if ((flags & O_DIRECTORY) && !S_ISDIR(p.dentry->d_inode->i_mode)) {
 		dput(p.dentry);
-		return NULL;
+		return -ENOTDIR;
 	}
 
 	if ((flags & O_TRUNC) && S_ISREG(p.dentry->d_inode->i_mode)) {
@@ -189,9 +206,13 @@ struct file *vfs_open(const char *path, int flags, uint16_t mode)
 		mark_inode_dirty(p.dentry->d_inode);
 	}
 
-	file = dentry_open(p.dentry, p.mnt, flags);
+	ret = dentry_open(p.dentry, p.mnt, flags, &file);
 	dput(p.dentry);	/* balance the ref taken by vfs_path_lookup */
-	return file;
+	if (ret < 0)
+		return ret;
+
+	*out = file;
+	return 0;
 }
 
 void vfs_close(struct file *filp)

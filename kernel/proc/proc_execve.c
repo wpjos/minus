@@ -26,11 +26,14 @@ static int proc_setup_std_fds(struct task_struct *task)
 
 	for (fd = 0; fd <= 2; fd++) {
 		struct file *old = fget(task->files, fd);
-		struct file *f = vfs_open("/dev/console", O_RDWR, 0);
-		if (!f) {
+		struct file *f = NULL;
+		int ret;
+
+		ret = vfs_open("/dev/console", O_RDWR, 0, &f);
+		if (ret < 0) {
 			if (old)
 				vfs_close(old);
-			return -ENODEV;
+			return ret;
 		}
 		fd_install(task->files, fd, f);
 		if (old)

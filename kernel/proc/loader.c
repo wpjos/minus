@@ -259,9 +259,10 @@ int proc_load_elf(const char *path, struct task_struct *task,
 	if (!vs || !vs->pgd)
 		return -EINVAL;
 
-	file = vfs_open(path, O_RDONLY, 0);
-	if (!file)
-		return -ENOENT;
+	file = NULL;
+	ret = vfs_open(path, O_RDONLY, 0, &file);
+	if (ret < 0)
+		return ret;
 
 	ret = proc_read_whole_file(file, &elf_buf, &elf_size);
 	vfs_close(file);

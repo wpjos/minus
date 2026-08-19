@@ -9,6 +9,7 @@
 #include "module.h"
 #include "printk.h"
 #include "string.h"
+#include "errno.h"
 
 /*
  * rpi-fb - Raspberry Pi framebuffer driver.
@@ -124,7 +125,7 @@ static int rpi_fb_setup_from_simplefb(struct rpi_fb *rpi,
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		printk("rpi-fb: simple-framebuffer missing reg resource\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	prop = of_get_property(fdt, node, "width", &len);
@@ -145,7 +146,7 @@ static int rpi_fb_setup_from_simplefb(struct rpi_fb *rpi,
 
 	if (width == 0 || height == 0 || stride == 0) {
 		printk("rpi-fb: simple-framebuffer missing w/h/stride\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	rpi->fb_phys = res->start;
@@ -158,7 +159,7 @@ static int rpi_fb_setup_from_simplefb(struct rpi_fb *rpi,
 	rpi->fb_base = mmu_ioremap(rpi->fb_phys, rpi->fb_size);
 	if (!rpi->fb_base) {
 		printk("rpi-fb: failed to map simple-framebuffer\n");
-		return -1;
+		return -ENOMEM;
 	}
 
 	rpi_fb_clear(rpi->fb_base, rpi->fb_size);
@@ -178,7 +179,7 @@ static int rpi_fb_setup_from_simplefb(struct rpi_fb *rpi,
 
 	if (fb_register(&rpi->info) < 0) {
 		printk("rpi-fb: failed to register framebuffer\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	printk("rpi-fb: simple-framebuffer %ux%u stride=%u fmt=%s phys=%p size=%p\n",
@@ -234,7 +235,7 @@ static int rpi_fb_alloc_framebuffer(struct rpi_fb *rpi,
 	ret = rpi_firmware_property(rpi->prop_buf, size);
 	if (ret < 0) {
 		printk("rpi-fb: firmware property call failed\n");
-		return -1;
+		return ret;
 	}
 
 	/*
@@ -245,8 +246,8 @@ static int rpi_fb_alloc_framebuffer(struct rpi_fb *rpi,
 	code = get_u32(&p);
 	if ((code & RPI_TAG_RESPONSE_MASK) == 0) {
 		printk("rpi-fb: firmware did not set response bit (%p)\n",
-		       (void *)(unsigned long long)code);
-		return -1;
+	       (void *)(unsigned long long)code);
+		return -EIO;
 	}
 
 	alloc_resp[0] = 0;
@@ -290,7 +291,7 @@ static int rpi_fb_alloc_framebuffer(struct rpi_fb *rpi,
 		       (void *)(unsigned long long)alloc_resp[0],
 		       (void *)(unsigned long long)alloc_resp[1],
 		       (void *)(unsigned long long)pitch);
-		return -1;
+		return -EINVAL;
 	}
 
 	/*
@@ -304,7 +305,7 @@ static int rpi_fb_alloc_framebuffer(struct rpi_fb *rpi,
 	rpi->fb_base = mmu_ioremap(rpi->fb_phys, rpi->fb_size);
 	if (!rpi->fb_base) {
 		printk("rpi-fb: failed to map framebuffer\n");
-		return -1;
+		return -ENOMEM;
 	}
 
 	rpi_fb_clear(rpi->fb_base, rpi->fb_size);
@@ -324,7 +325,7 @@ static int rpi_fb_alloc_framebuffer(struct rpi_fb *rpi,
 
 	if (fb_register(&rpi->info) < 0) {
 		printk("rpi-fb: failed to register framebuffer\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	printk("rpi-fb: %ux%u@%u bpp, pitch=%u phys=%p size=%p\n",
@@ -369,16 +370,18 @@ static int rpi_fb_probe(struct platform_device *pdev)
 	struct rpi_fb *rpi;
 	const char *compat;
 	int len;
+	int ret;
 
 	rpi = (struct rpi_fb *)kzalloc(sizeof(*rpi));
 	if (!rpi)
-		return -1;
+		return -ENOMEM;
 
 	compat = of_get_property(fdt_base(), pdev->dev.of_node, "compatible", &len);
 	if (compat && strcmp(compat, "simple-framebuffer") == 0) {
-		if (rpi_fb_setup_from_simplefb(rpi, pdev) < 0) {
+		ret = rpi_fb_setup_from_simplefb(rpi, pdev);
+		if (ret < 0) {
 			kfree(rpi);
-			return -1;
+			return ret;
 		}
 	} else {
 		/* Legacy brcm,bcm2708-fb or fallback: use mailbox allocation. */
@@ -386,16 +389,17 @@ static int rpi_fb_probe(struct platform_device *pdev)
 		if (!rpi->prop_page) {
 			printk("rpi-fb: failed to allocate property buffer\n");
 			kfree(rpi);
-			return -1;
+			return -ENOMEM;
 		}
 		rpi->prop_buf = page_to_virt(rpi->prop_page);
 		memset(rpi->prop_buf, 0, PAGE_SIZE);
 		rpi->pdev = pdev;
 
-		if (rpi_fb_alloc_framebuffer(rpi, pdev) < 0) {
+		ret = rpi_fb_alloc_framebuffer(rpi, pdev);
+		if (ret < 0) {
 			buddy_free_pages(rpi->prop_page);
 			kfree(rpi);
-			return -1;
+			return ret;
 		}
 	}
 

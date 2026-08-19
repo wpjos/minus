@@ -9,6 +9,7 @@
 #include "task.h"
 #include "irqflags.h"
 #include "wait.h"
+#include "errno.h"
 
 /* PL011 UART register offsets */
 #define UART_DR(base)	(*(volatile uint32_t *)((base) + 0x00))
@@ -95,7 +96,7 @@ static int uart_rx_buf_pop(void)
 	uint8_t c;
 
 	if (uart_rx_buf_empty())
-		return -1;
+		return -EAGAIN;
 
 	c = g_uart_rx_buf[g_uart_rx_head];
 	g_uart_rx_head = (g_uart_rx_head + 1) % UART_RX_BUF_SIZE;
@@ -139,29 +140,29 @@ static int uart_probe(struct platform_device *pdev)
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		printk("uart prob fail\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	g_uart_base = (uintptr_t)mmu_ioremap(res->start, resource_size(res));
 	if (!g_uart_base)
-		return -1;
+		return -ENOMEM;
 
 	UART_CR(g_uart_base) = UART_CR_UARTEN | UART_CR_TXE | UART_CR_RXE;
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq <= 0) {
 		printk("uart: no IRQ resource\n");
-		return -1;
+		return -ENOENT;
 	}
 
 	if (request_irq((unsigned int)irq, uart_irq_handler, NULL) != 0) {
 		printk("uart: failed to request IRQ %d\n", irq);
-		return -1;
+		return -EINVAL;
 	}
 
 	if (enable_irq((unsigned int)irq) != 0) {
 		printk("uart: failed to enable IRQ %d\n", irq);
-		return -1;
+		return -EINVAL;
 	}
 
 	/* Enable receive and receive-timeout interrupts. */

@@ -10,6 +10,7 @@
 #include "memory.h"
 #include "module.h"
 #include "printk.h"
+#include "errno.h"
 
 struct virtio_gpu {
 	struct virtio_device *vdev;
@@ -34,6 +35,7 @@ static int virtio_gpu_send_cmd(struct virtio_device *vdev,
 	uint32_t len;
 	int cookie_val = 1;
 	struct virtio_gpu_ctrl_hdr *hdr;
+	int ret;
 
 	desc[0].addr = __VA_PA__((uintptr_t)req);
 	desc[0].len = (uint32_t)req_len;
@@ -45,8 +47,9 @@ static int virtio_gpu_send_cmd(struct virtio_device *vdev,
 	desc[1].flags = VRING_DESC_F_WRITE;
 	desc[1].next = 0;
 
-	if (virtio_add_buf(vdev, desc, 2, &cookie_val) < 0)
-		return -1;
+	ret = virtio_add_buf(vdev, desc, 2, &cookie_val);
+	if (ret < 0)
+		return ret;
 
 	virtio_mmio_notify(vdev, 0);
 
@@ -57,7 +60,7 @@ static int virtio_gpu_send_cmd(struct virtio_device *vdev,
 	}
 
 	hdr = (struct virtio_gpu_ctrl_hdr *)resp;
-	return (hdr->type == expected_resp) ? 0 : -1;
+	return (hdr->type == expected_resp) ? 0 : -EIO;
 }
 
 static int virtio_gpu_get_display_info(struct virtio_device *vdev,
@@ -77,18 +80,18 @@ static int virtio_gpu_get_display_info(struct virtio_device *vdev,
 	if (ret < 0) {
 		printk("virtio-gpu: GET_DISPLAY_INFO failed, resp type=%x\n",
 		       resp.hdr.type);
-		return -1;
+		return ret;
 	}
 
 	if (resp.hdr.type != VIRTIO_GPU_RESP_OK_DISPLAY_INFO) {
 		printk("virtio-gpu: unexpected display info resp type=%x\n",
 		       resp.hdr.type);
-		return -1;
+		return -EIO;
 	}
 
 	if (resp.pmodes[0].enabled == 0) {
 		printk("virtio-gpu: scanout 0 not enabled\n");
-		return -1;
+		return -ENODEV;
 	}
 
 	*width = resp.pmodes[0].r.width;
@@ -248,21 +251,22 @@ static int virtio_gpu_probe(struct virtio_device *vdev)
 
 	ret = virtio_mmio_setup_queue(vdev, 0, VIRTIO_GPU_QUEUE_SIZE);
 	if (ret < 0)
-		return -1;
+		return ret;
 
 	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_DRIVER_OK);
 	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_STARTED);
 
-	if (virtio_gpu_get_display_info(vdev, &width, &height) < 0) {
+	ret = virtio_gpu_get_display_info(vdev, &width, &height);
+	if (ret < 0) {
 		printk("virtio-gpu: failed to get display info\n");
-		return -1;
+		return ret;
 	}
 
 	printk("virtio-gpu: display %ux%u\n", width, height);
 
 	gpu = (struct virtio_gpu *)kmalloc(sizeof(*gpu));
 	if (!gpu)
-		return -1;
+		return -ENOMEM;
 	memset(gpu, 0, sizeof(*gpu));
 
 	gpu->vdev = vdev;
@@ -277,7 +281,7 @@ static int virtio_gpu_probe(struct virtio_device *vdev)
 	if (!gpu->fb_pages) {
 		printk("virtio-gpu: failed to allocate framebuffer memory\n");
 		kfree(gpu);
-		return -1;
+		return -ENOMEM;
 	}
 
 	gpu->fb_phys = page_to_phy(gpu->fb_pages);
@@ -286,7 +290,7 @@ static int virtio_gpu_probe(struct virtio_device *vdev)
 		printk("virtio-gpu: failed to map framebuffer\n");
 		buddy_free_pages(gpu->fb_pages);
 		kfree(gpu);
-		return -1;
+		return -ENOMEM;
 	}
 
 	memset(gpu->fb_base, 0, size);
@@ -334,7 +338,7 @@ static int virtio_gpu_probe(struct virtio_device *vdev)
 fail_fb:
 	buddy_free_pages(gpu->fb_pages);
 	kfree(gpu);
-	return -1;
+	return -EIO;
 }
 
 static const struct virtio_device_id virtio_gpu_id_table[] = {

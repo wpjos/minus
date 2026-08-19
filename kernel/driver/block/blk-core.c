@@ -2,6 +2,7 @@
 #include "string.h"
 #include "mm.h"
 #include "module.h"
+#include "errno.h"
 
 #define MAX_BLKDEVS	256
 
@@ -11,7 +12,7 @@ static struct dlist_node g_bdev_list;
 static int blkdev_major_to_index(unsigned int major)
 {
 	if (major == 0 || major >= MAX_BLKDEVS)
-		return -1;
+		return -EINVAL;
 	return (int)major;
 }
 
@@ -24,9 +25,9 @@ int register_blkdev(unsigned int major, const char *name,
 
 	idx = blkdev_major_to_index(major);
 	if (idx < 0)
-		return -1;
+		return idx;
 	if (g_blkdevs[idx])
-		return -1;
+		return -EEXIST;
 
 	g_blkdevs[idx] = (struct block_device *)ops;
 	dlist_init(&g_bdev_list);
@@ -38,7 +39,7 @@ int unregister_blkdev(unsigned int major)
 	int idx = blkdev_major_to_index(major);
 
 	if (idx < 0)
-		return -1;
+		return idx;
 	g_blkdevs[idx] = NULL;
 	return 0;
 }
@@ -50,26 +51,28 @@ int unregister_blkdev(unsigned int major)
 int add_block_device(struct block_device *bdev)
 {
 	int idx;
+	int ret;
 	struct block_device_operations *ops;
 
 	if (!bdev)
-		return -1;
+		return -EINVAL;
 
 	idx = blkdev_major_to_index(MAJOR(bdev->bd_dev));
 	if (idx < 0)
-		return -1;
+		return idx;
 
 	ops = (struct block_device_operations *)g_blkdevs[idx];
 	if (!ops)
-		return -1;
+		return -ENODEV;
 
 	bdev->bd_ops = ops;
 	bdev->bd_ref_count = 1;
 	dlist_add(&g_bdev_list, &bdev->bd_list);
 
 	if (ops->open) {
-		if (ops->open(bdev) != 0)
-			return -1;
+		ret = ops->open(bdev);
+		if (ret != 0)
+			return ret;
 	}
 
 	return 0;
@@ -159,7 +162,7 @@ int bdev_read_blocks(struct block_device *bdev, uint64_t lba,
 		     size_t nr_blocks, void *buf)
 {
 	if (!bdev || !bdev->bd_ops || !bdev->bd_ops->request)
-		return -1;
+		return -EINVAL;
 	return bdev->bd_ops->request(bdev, lba, nr_blocks, buf, REQ_OP_READ);
 }
 
@@ -167,7 +170,7 @@ int bdev_write_blocks(struct block_device *bdev, uint64_t lba,
 		      size_t nr_blocks, void *buf)
 {
 	if (!bdev || !bdev->bd_ops || !bdev->bd_ops->request)
-		return -1;
+		return -EINVAL;
 	return bdev->bd_ops->request(bdev, lba, nr_blocks, buf, REQ_OP_WRITE);
 }
 

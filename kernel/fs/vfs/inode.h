@@ -7,6 +7,7 @@
 
 struct block_device;
 struct super_block;
+struct dentry;
 struct file_operations;
 
 /* Address space embedded in each inode. */
@@ -38,7 +39,8 @@ struct inode {
 };
 
 struct inode_operations {
-	struct dentry *(*lookup)(struct inode *dir, struct dentry *dentry);
+	int (*lookup)(struct inode *dir, struct dentry *dentry,
+		      struct dentry **found);
 	int (*create)(struct inode *dir, struct dentry *dentry, uint16_t mode);
 	int (*mkdir)(struct inode *dir, struct dentry *dentry, uint16_t mode);
 	int (*unlink)(struct inode *dir, struct dentry *dentry);

@@ -47,8 +47,8 @@ struct file_operations {
 };
 
 /* VFS file helpers (public declarations are in include/fs/vfs.h). */
-struct file *dentry_open(struct dentry *dentry, struct vfsmount *mnt,
-			 int flags);
+int dentry_open(struct dentry *dentry, struct vfsmount *mnt,
+		int flags, struct file **out);
 
 /* File descriptor table. */
 struct files_struct *alloc_files_struct(void);

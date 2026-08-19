@@ -27,7 +27,8 @@ struct path {
 
 /* Path lookup. */
 int path_lookup(const char *path, struct path *path_out);
-struct dentry *lookup_one_len(const char *name, struct dentry *base, int len);
+int lookup_one_len(const char *name, struct dentry *base, int len,
+		   struct dentry **out);
 
 /* Dentry cache management. */
 void dentry_cache_init(void);

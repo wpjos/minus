@@ -34,9 +34,9 @@ long sys_openat(int dirfd, const char *pathname, int flags, uint16_t mode)
 	if (ret < 0)
 		return ret;
 
-	file = vfs_open(path, flags, mode);
-	if (!file)
-		return -ENOENT;
+	ret = vfs_open(path, flags, mode, &file);
+	if (ret < 0)
+		return ret;
 
 	fd = get_unused_fd(current->files);
 	if (fd < 0) {

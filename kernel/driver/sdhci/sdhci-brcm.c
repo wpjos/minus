@@ -8,6 +8,7 @@
 #include "mm.h"
 #include "printk.h"
 #include "string.h"
+#include "errno.h"
 
 /* Broadcom SDIO CFG registers (second reg region) */
 #define SDIO_CFG_CTRL			0x00
@@ -107,18 +108,19 @@ static int brcm_sdhci_probe(struct platform_device *pdev)
 	struct sdhci_host *host;
 	uint32_t base_clock;
 	int irq;
+	int ret;
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	cfg = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	irq_res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
 	if (!mem || !irq_res) {
 		printk("brcm_sdhci: missing reg/irq resource\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	host = (struct sdhci_host *)kzalloc(sizeof(*host));
 	if (!host)
-		return -1;
+		return -ENOMEM;
 
 	host->pdev = pdev;
 	pdev->dev.driver_data = host;
@@ -126,7 +128,7 @@ static int brcm_sdhci_probe(struct platform_device *pdev)
 	if (!host->ioaddr) {
 		printk("brcm_sdhci: ioremap failed\n");
 		kfree(host);
-		return -1;
+		return -ENOMEM;
 	}
 
 	if (cfg) {
@@ -134,7 +136,7 @@ static int brcm_sdhci_probe(struct platform_device *pdev)
 		if (!host->cfg_regs) {
 			printk("brcm_sdhci: cfg ioremap failed\n");
 			kfree(host);
-			return -1;
+			return -ENOMEM;
 		}
 	}
 
@@ -151,13 +153,13 @@ static int brcm_sdhci_probe(struct platform_device *pdev)
 	if (request_irq((unsigned int)irq, brcm_sdhci_irq_handler, host) != 0) {
 		printk("brcm_sdhci: failed to request irq %d\n", irq);
 		kfree(host);
-		return -1;
+		return -EINVAL;
 	}
 
 	if (enable_irq((unsigned int)irq) != 0) {
 		printk("brcm_sdhci: failed to enable irq %d\n", irq);
 		kfree(host);
-		return -1;
+		return -EINVAL;
 	}
 
 	printk("brcm_sdhci: probe io=%p irq=%d base_clock=%d node=%p\n",
@@ -166,10 +168,11 @@ static int brcm_sdhci_probe(struct platform_device *pdev)
 
 	brcm_sdhci_cfginit_2712(host);
 
-	if (sdhci_host_init(host) < 0) {
+	ret = sdhci_host_init(host);
+	if (ret < 0) {
 		printk("brcm_sdhci: host init failed\n");
 		kfree(host);
-		return -1;
+		return ret;
 	}
 
 	{
@@ -193,10 +196,11 @@ static int brcm_sdhci_probe(struct platform_device *pdev)
 		brcm_sdhci_force_card_present(host);
 	}
 
-	if (sd_card_init(host) < 0) {
+	ret = sd_card_init(host);
+	if (ret < 0) {
 		printk("brcm_sdhci: no card or card init failed\n");
 		kfree(host);
-		return -1;
+		return ret;
 	}
 
 	mmcblk_probe(host);

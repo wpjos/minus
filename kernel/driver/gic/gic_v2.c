@@ -4,6 +4,7 @@
 #include "module.h"
 #include "irq.h"
 #include "mmu.h"
+#include "errno.h"
 
 /* Cached MMIO bases */
 static uintptr_t g_gicd_base;
@@ -215,13 +216,13 @@ static int gic_probe(struct platform_device *pdev)
 	res_d = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	res_c = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (!res_d || !res_c) {
-		return -1;
+		return -ENOENT;
 	}
 
 	g_gicd_base = (uintptr_t)mmu_ioremap(res_d->start, resource_size(res_d));
 	g_gicc_base = (uintptr_t)mmu_ioremap(res_c->start, resource_size(res_c));
 	if (!g_gicd_base || !g_gicc_base)
-		return -1;
+		return -ENOMEM;
 
 	gic_dist_init();
 	gic_cpu_init();
@@ -255,7 +256,7 @@ module_register(gic, MODULE_LEVEL_HIGH, gic_init);
 static int gic_v2_irq_enable(unsigned int irq)
 {
 	if (irq >= GIC_NR_IRQS)
-		return -1;
+		return -EINVAL;
 
 	gicd_enable_irq(irq);
 	return 0;
@@ -264,7 +265,7 @@ static int gic_v2_irq_enable(unsigned int irq)
 static int gic_v2_irq_disable(unsigned int irq)
 {
 	if (irq >= GIC_NR_IRQS)
-		return -1;
+		return -EINVAL;
 
 	gicd_disable_irq(irq);
 	return 0;
@@ -273,7 +274,7 @@ static int gic_v2_irq_disable(unsigned int irq)
 static int gic_v2_irq_set_priority(unsigned int irq, uint8_t prio)
 {
 	if (irq >= GIC_NR_IRQS)
-		return -1;
+		return -EINVAL;
 
 	gic_irq_prio_write(irq, prio);
 	return 0;
@@ -282,7 +283,7 @@ static int gic_v2_irq_set_priority(unsigned int irq, uint8_t prio)
 static int gic_v2_irq_set_type(unsigned int irq, unsigned int type)
 {
 	if (irq >= GIC_NR_IRQS)
-		return -1;
+		return -EINVAL;
 
 	gic_irq_cfg_write(irq, type);
 	return 0;
@@ -291,7 +292,7 @@ static int gic_v2_irq_set_type(unsigned int irq, unsigned int type)
 static int gic_v2_irq_set_group(unsigned int irq, unsigned int group)
 {
 	if (irq >= GIC_NR_IRQS)
-		return -1;
+		return -EINVAL;
 
 	gic_irq_group_write(irq, group);
 	return 0;
@@ -303,7 +304,7 @@ static int gic_v2_irq_set_group(unsigned int irq, unsigned int group)
 static int gic_v2_request_irq(unsigned int irq, irq_handler_t handler, void *dev_id)
 {
 	if (irq >= GIC_MAX_HANDLERS)
-		return -1;
+		return -EINVAL;
 
 	g_handlers[irq] = handler;
 	g_handler_data[irq] = dev_id;

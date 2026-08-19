@@ -12,7 +12,8 @@ static struct ext4_dir_entry_2 *ext4_next_entry(struct ext4_dir_entry_2 *de)
 					   le16_to_cpu(de->rec_len));
 }
 
-struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry)
+int ext4_lookup(struct inode *dir, struct dentry *dentry,
+		struct dentry **found)
 {
 	struct buffer_head *bh;
 	struct ext4_dir_entry_2 *de;
@@ -21,12 +22,15 @@ struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry)
 	uint32_t nr_blocks = (dir->i_size + block_size - 1) / block_size;
 	uint32_t bidx;
 
+	if (!found)
+		return -EINVAL;
+
 	for (bidx = 0; bidx < nr_blocks; bidx++) {
 		if (ext4_get_block(dir, bidx, &block) != 0)
-			return NULL;
+			return -EIO;
 		bh = sb_bread(dir->i_sb, block);
 		if (!bh)
-			return NULL;
+			return -EIO;
 
 		de = (struct ext4_dir_entry_2 *)bh->b_data;
 		while ((char *)de < (char *)bh->b_data + block_size) {
@@ -38,9 +42,10 @@ struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry)
 					inode = ext4_iget(dir->i_sb, le32_to_cpu(de->inode));
 					brelse(bh);
 					if (!inode)
-						return NULL;
+						return -EIO;
 					d_instantiate(dentry, inode);
-					return dentry;
+					*found = dentry;
+					return 0;
 				}
 			}
 			de = ext4_next_entry(de);
@@ -48,7 +53,8 @@ struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry)
 		brelse(bh);
 	}
 
-	return NULL;
+	*found = NULL;
+	return 0;
 }
 
 int ext4_dir_is_empty(struct inode *inode)

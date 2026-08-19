@@ -8,6 +8,7 @@
 #include "module.h"
 #include "memory.h"
 #include "printk.h"
+#include "errno.h"
 
 static uint32_t vring_size(uint32_t num, uint32_t align)
 {
@@ -36,7 +37,7 @@ int virtio_mmio_setup_queue(struct virtio_device *vdev, uint32_t qid,
 
 	mem = kzalloc_pages(size);
 	if (!mem)
-		return -1;
+		return -ENOMEM;
 	desc = mem;
 	/*
 	 * Legacy virtio vring layout: descriptor table first, then the available
@@ -64,7 +65,7 @@ int virtio_mmio_setup_queue(struct virtio_device *vdev, uint32_t qid,
 	num_max = virtio_readl(vdev->base, VIRTIO_MMIO_QUEUE_NUM_MAX);
 	if (num_max && num_max < num) {
 		kfree_pages(mem);
-		return -1;
+		return -ENOSPC;
 	}
 	virtio_writel(vdev->base, VIRTIO_MMIO_QUEUE_NUM, num);
 	virtio_writel(vdev->base, VIRTIO_MMIO_QUEUE_ALIGN, align);
@@ -89,11 +90,11 @@ int virtio_add_buf(struct virtio_device *vdev, struct vring_desc *descs,
 	uint16_t idx;
 
 	if (ndescs == 0)
-		return -1;
+		return -EINVAL;
 
 	head = (uint16_t)vq->free_desc;
 	if (vq->data[head])
-		return -1;
+		return -EBUSY;
 
 	for (uint32_t i = 0; i < ndescs; i++) {
 		idx = (uint16_t)vq->free_desc;
@@ -177,18 +178,18 @@ int virtio_mmio_probe(struct platform_device *pdev)
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
-		return -1;
+		return -ENOENT;
 
 	base = (uintptr_t)mmu_ioremap(res->start, resource_size(res));
 	if (!base)
-		return -1;
+		return -ENOMEM;
 
 	magic = virtio_readl(base, VIRTIO_MMIO_MAGIC_VALUE);
 	version = virtio_readl(base, VIRTIO_MMIO_VERSION);
 	device_id = virtio_readl(base, VIRTIO_MMIO_DEVICE_ID);
 
 	if (magic != VIRTIO_MAGIC || version != VIRTIO_VERSION_LEGACY)
-		return -1;
+		return -ENODEV;
 
 	if (device_id == 0)
 		return 0; /* no device */
@@ -197,7 +198,7 @@ int virtio_mmio_probe(struct platform_device *pdev)
 
 	vdev = (struct virtio_device *)kmalloc(sizeof(*vdev));
 	if (!vdev)
-		return -1;
+		return -ENOMEM;
 	memset(vdev, 0, sizeof(*vdev));
 
 	vdev->base = base;
@@ -212,7 +213,7 @@ int virtio_mmio_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_FAILED);
 		kfree(vdev);
-		return -1;
+		return ret;
 	}
 
 	virtio_mmio_set_status(vdev, VIRTIO_CONFIG_S_FEATURES_OK);

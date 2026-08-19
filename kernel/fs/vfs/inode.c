@@ -3,6 +3,7 @@
 #include "string.h"
 #include "mm.h"
 #include "slab.h"
+#include "errno.h"
 
 static struct kmem_cache *g_inode_cache;
 static struct rb_tree g_inode_tree;
@@ -124,7 +125,7 @@ int write_inode_now(struct inode *inode)
 	int ret = 0;
 
 	if (!inode)
-		return -1;
+		return -EINVAL;
 
 	if (inode->i_sb->s_op && inode->i_sb->s_op->write_inode)
 		ret = inode->i_sb->s_op->write_inode(inode);

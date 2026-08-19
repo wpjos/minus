@@ -12,19 +12,23 @@ static struct dlist_node g_mounts;
 struct dentry *root_dentry = NULL;
 struct vfsmount *root_mnt = NULL;
 
-struct vfsmount *kern_mount(struct file_system_type *fs, const char *dev_name)
+int kern_mount(struct file_system_type *fs, const char *dev_name,
+	       struct vfsmount **out)
 {
 	struct super_block *sb;
 	struct vfsmount *mnt;
 
+	if (!fs || !out)
+		return -EINVAL;
+
 	sb = fs->mount(fs, dev_name, NULL);
 	if (!sb)
-		return NULL;
+		return -EIO;
 
 	mnt = (struct vfsmount *)kmalloc(sizeof(*mnt));
 	if (!mnt) {
 		fs->kill_sb(sb);
-		return NULL;
+		return -ENOMEM;
 	}
 	memset(mnt, 0, sizeof(*mnt));
 	mnt->mnt_sb = sb;
@@ -34,7 +38,8 @@ struct vfsmount *kern_mount(struct file_system_type *fs, const char *dev_name)
 	dlist_init(&mnt->mnt_list);
 	dlist_add(&g_mounts, &mnt->mnt_list);
 
-	return mnt;
+	*out = mnt;
+	return 0;
 }
 
 int vfs_do_mount(const char *dev_name, const char *fs_name,
@@ -42,14 +47,16 @@ int vfs_do_mount(const char *dev_name, const char *fs_name,
 {
 	struct file_system_type *fs;
 	struct vfsmount *mnt;
+	int ret;
 
 	fs = get_fs_type(fs_name);
 	if (!fs)
 		return -ENODEV;
 
-	mnt = kern_mount(fs, dev_name);
-	if (!mnt)
-		return -EIO;
+	mnt = NULL;
+	ret = kern_mount(fs, dev_name, &mnt);
+	if (ret < 0)
+		return ret;
 
 	strncpy(mnt->mnt_devname, dev_name, sizeof(mnt->mnt_devname) - 1);
 
@@ -64,7 +71,6 @@ int vfs_do_mount(const char *dev_name, const char *fs_name,
 
 	{
 		struct path p;
-		int ret;
 
 		ret = vfs_path_lookup(dir_name, &p);
 		if (ret < 0)

@@ -34,7 +34,8 @@ struct file *fget(struct files_struct *files, int fd);
 void fd_install(struct files_struct *files, int fd, struct file *file);
 
 /* File operations. */
-struct file *vfs_open(const char *pathname, int flags, uint16_t mode);
+int vfs_open(const char *pathname, int flags, uint16_t mode,
+	     struct file **file);
 void vfs_close(struct file *filp);
 ssize_t vfs_read(struct file *filp, char *buf, size_t len, loff_t *pos);
 ssize_t vfs_write(struct file *filp, const char *buf, size_t len, loff_t *pos);

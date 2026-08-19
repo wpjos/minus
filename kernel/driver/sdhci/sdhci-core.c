@@ -3,6 +3,7 @@
 #include "printk.h"
 #include "generic_timer.h"
 #include "irqflags.h"
+#include "errno.h"
 
 #define SDHCI_TIMEOUT_US	1000000
 
@@ -27,7 +28,7 @@ int sdhci_reset(struct sdhci_host *host, uint8_t mask)
 	int timeout = 100;
 
 	if (host->ioaddr == NULL)
-		return -1;
+		return -EINVAL;
 
 	sdhci_writeb(host, mask, SDHCI_SOFTWARE_RESET);
 
@@ -41,7 +42,7 @@ int sdhci_reset(struct sdhci_host *host, uint8_t mask)
 	printk("sdhci: reset timeout mask=%p val=%p\n",
 	       (void *)(unsigned long long)mask,
 	       (void *)(unsigned long long)val);
-	return -1;
+	return -ETIMEDOUT;
 }
 
 static uint16_t sdhci_calc_clock(struct sdhci_host *host, uint32_t clock,
@@ -79,7 +80,7 @@ int sdhci_set_clock(struct sdhci_host *host, uint32_t hz)
 	int timeout;
 
 	if (host->ioaddr == NULL)
-		return -1;
+		return -EINVAL;
 
 	/* disable SD clock first */
 	clk = sdhci_readw(host, SDHCI_CLOCK_CONTROL);
@@ -93,7 +94,7 @@ int sdhci_set_clock(struct sdhci_host *host, uint32_t hz)
 
 	clk = sdhci_calc_clock(host, hz, &actual);
 	if (clk == 0 && hz != 0)
-		return -1;
+		return -EINVAL;
 
 	clk |= SDHCI_CLOCK_INT_EN;
 	sdhci_writew(host, clk, SDHCI_CLOCK_CONTROL);
@@ -102,7 +103,7 @@ int sdhci_set_clock(struct sdhci_host *host, uint32_t hz)
 	while (!(sdhci_readw(host, SDHCI_CLOCK_CONTROL) & SDHCI_CLOCK_INT_STABLE)) {
 		if (--timeout <= 0) {
 			printk("sdhci: clock stable timeout\n");
-			return -1;
+			return -ETIMEDOUT;
 		}
 		sdhci_udelay(1);
 	}
@@ -132,7 +133,7 @@ int sdhci_wait_irq(struct sdhci_host *host, uint32_t mask, uint32_t timeout_us)
 	uint64_t ticks = ((uint64_t)timeout_us * freq) / 1000000;
 
 	if (freq == 0)
-		return -1;
+		return -EINVAL;
 
 	while ((generic_timer_get_cntpct() - start) < ticks) {
 		intmask = sdhci_readl(host, SDHCI_INT_STATUS);
@@ -141,7 +142,7 @@ int sdhci_wait_irq(struct sdhci_host *host, uint32_t mask, uint32_t timeout_us)
 			       (void *)(unsigned long long)intmask);
 			sdhci_writel(host, intmask & SDHCI_INT_ERROR_MASK,
 				     SDHCI_INT_STATUS);
-			return -1;
+			return -EIO;
 		}
 		if (intmask & mask) {
 			sdhci_writel(host, intmask & mask, SDHCI_INT_STATUS);
@@ -153,7 +154,7 @@ int sdhci_wait_irq(struct sdhci_host *host, uint32_t mask, uint32_t timeout_us)
 	printk("sdhci: wait_irq timeout mask=%p status=%p\n",
 	       (void *)(unsigned long long)mask,
 	       (void *)(unsigned long long)sdhci_readl(host, SDHCI_INT_STATUS));
-	return -1;
+	return -ETIMEDOUT;
 }
 
 int sdhci_wait_inhibit(struct sdhci_host *host, uint32_t mask,
@@ -164,7 +165,7 @@ int sdhci_wait_inhibit(struct sdhci_host *host, uint32_t mask,
 	uint64_t ticks = ((uint64_t)timeout_us * freq) / 1000000;
 
 	if (freq == 0)
-		return -1;
+		return -EINVAL;
 
 	while ((generic_timer_get_cntpct() - start) < ticks) {
 		if (!(sdhci_readl(host, SDHCI_PRESENT_STATE) & mask))
@@ -172,7 +173,7 @@ int sdhci_wait_inhibit(struct sdhci_host *host, uint32_t mask,
 		cpu_relax();
 	}
 
-	return -1;
+	return -ETIMEDOUT;
 }
 
 int sdhci_send_command(struct sdhci_host *host, uint8_t cmd, uint32_t arg,
@@ -185,12 +186,12 @@ int sdhci_send_command(struct sdhci_host *host, uint8_t cmd, uint32_t arg,
 	int i;
 
 	if (host->ioaddr == NULL)
-		return -1;
+		return -EINVAL;
 
 	/* wait for command line free */
 	if (sdhci_wait_inhibit(host, SDHCI_CMD_INHIBIT, 100000) < 0) {
 		printk("sdhci: cmd inhibit timeout cmd=%d\n", (int)cmd);
-		return -1;
+		return -ETIMEDOUT;
 	}
 
 	/* clear command related interrupt status */
@@ -251,7 +252,7 @@ int sdhci_transfer_pio(struct sdhci_host *host, void *buf, size_t len,
 	uint32_t state;
 
 	if (host->ioaddr == NULL)
-		return -1;
+		return -EINVAL;
 
 	present_mask = write ? SDHCI_SPACE_AVAILABLE : SDHCI_DATA_AVAILABLE;
 	freq = generic_timer_get_cntfrq();
@@ -269,7 +270,7 @@ int sdhci_transfer_pio(struct sdhci_host *host, void *buf, size_t len,
 				       "present=%p\n",
 				       (int)i,
 				       (void *)(unsigned long long)state);
-				return -1;
+				return -ETIMEDOUT;
 			}
 		}
 
@@ -289,7 +290,7 @@ int sdhci_transfer_pio(struct sdhci_host *host, void *buf, size_t len,
 		    (generic_timer_get_cntpct() - start) >= ticks) {
 			printk("sdhci: pio data_end timeout present=%p\n",
 			       (void *)(unsigned long long)state);
-			return -1;
+			return -ETIMEDOUT;
 		}
 	}
 
@@ -303,16 +304,18 @@ int sdhci_transfer_pio(struct sdhci_host *host, void *buf, size_t len,
 int sdhci_host_init(struct sdhci_host *host)
 {
 	uint32_t caps;
+	int ret;
 
 	if (host->ioaddr == NULL)
-		return -1;
+		return -EINVAL;
 
 	sdhci_writel(host, SDHCI_INT_ALL_MASK, SDHCI_INT_STATUS);
 	sdhci_writel(host, 0, SDHCI_INT_ENABLE);
 	sdhci_writel(host, 0, SDHCI_SIGNAL_ENABLE);
 
-	if (sdhci_reset(host, SDHCI_RESET_ALL) < 0)
-		return -1;
+	ret = sdhci_reset(host, SDHCI_RESET_ALL);
+	if (ret < 0)
+		return ret;
 
 	sdhci_set_power(host);
 
@@ -322,8 +325,9 @@ int sdhci_host_init(struct sdhci_host *host)
 	/* default to 1-bit bus, 400 kHz identification clock */
 	sdhci_writeb(host, 0, SDHCI_HOST_CONTROL);
 
-	if (sdhci_set_clock(host, 400000) < 0)
-		return -1;
+	ret = sdhci_set_clock(host, 400000);
+	if (ret < 0)
+		return ret;
 
 	/*
 	 * Enable status bits for everything we poll, but do not signal any

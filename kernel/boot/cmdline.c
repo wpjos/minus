@@ -1,4 +1,5 @@
 #include "cmdline.h"
+#include "errno.h"
 #include "fdt.h"
 #include "of.h"
 #include "string.h"
@@ -15,7 +16,7 @@ int parse_bootargs(struct bootargs *args)
 	char tok[64];
 
 	if (!args)
-		return -1;
+		return -EINVAL;
 
 	args->root_device[0] = '\0';
 	args->root_fstype[0] = '\0';
@@ -23,11 +24,11 @@ int parse_bootargs(struct bootargs *args)
 
 	chosen = fdt_path_offset(fdt, "/chosen");
 	if (chosen < 0)
-		return -1;
+		return -ENOENT;
 
 	prop = of_get_property(fdt, chosen, "bootargs", &len);
 	if (!prop || len <= 0)
-		return -1;
+		return -ENOENT;
 
 	if ((size_t)len >= sizeof(buf))
 		len = sizeof(buf) - 1;

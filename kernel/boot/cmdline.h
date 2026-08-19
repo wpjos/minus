@@ -11,7 +11,8 @@ struct bootargs {
 /*
  * Parse /chosen/bootargs from the device tree.
  * Fills @args with recognized values; unrecognized tokens are ignored.
- * Returns 0 on success, -1 if no bootargs property exists.
+ * Returns 0 on success, -ENOENT if /chosen/bootargs is missing, or another
+ * negative errno on invalid arguments / parse failure.
  */
 int parse_bootargs(struct bootargs *args);
 

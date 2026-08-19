@@ -3,6 +3,7 @@
 #include "printk.h"
 #include "mm.h"
 #include "string.h"
+#include "errno.h"
 
 struct mbr_partition {
 	uint8_t	 status;
@@ -38,7 +39,7 @@ static int mmcblk_request(struct block_device *bdev, uint64_t lba,
 	int ret;
 
 	if (!host)
-		return -1;
+		return -EINVAL;
 
 	/*
 	 * The VFS block layer passes lba/nr_blocks in units of bd_block_size.
@@ -51,9 +52,9 @@ static int mmcblk_request(struct block_device *bdev, uint64_t lba,
 	/* Bound-check partition-relative accesses. */
 	if (bdev->bd_nr_blocks) {
 		if (sector_lba + nr_sectors < sector_lba)
-			return -1;
+			return -EINVAL;
 		if (sector_lba + nr_sectors > bdev->bd_nr_blocks)
-			return -1;
+			return -EINVAL;
 	}
 
 	abs_lba = bdev->bd_start_lba + sector_lba;
@@ -71,7 +72,7 @@ static int mmcblk_open(struct block_device *bdev)
 	struct sdhci_host *host = (struct sdhci_host *)bdev->bd_private;
 
 	if (!host || host->ioaddr == NULL)
-		return -1;
+		return -EINVAL;
 	return 0;
 }
 
