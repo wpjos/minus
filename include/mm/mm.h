@@ -11,7 +11,7 @@ void memblock_free_to_buddy(void);
 uint64_t memblock_mem_start(void);
 uint64_t memblock_mem_end(void);
 
-void mm_init(void);
+int mm_init(void);
 
 void *kmalloc(size_t size);
 void *kzalloc(size_t size);

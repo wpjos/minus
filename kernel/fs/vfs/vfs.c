@@ -11,6 +11,7 @@
 #include "errno.h"
 #include "fcntl.h"
 #include "stat.h"
+#include "subsys.h"
 
 static struct file_system_type *g_fs_types;
 static struct dlist_node g_superblocks;
@@ -355,3 +356,16 @@ int vfs_rmdir(const char *pathname)
 {
 	return vfs_do_rmdir(pathname);
 }
+
+static int fs_subsys_init(void)
+{
+	vfs_init();
+	return 0;
+}
+
+static const struct subsys_ops fs_subsys_ops = {
+	.name = "fs",
+	.level = SUBSYS_LEVEL_FS,
+	.init = fs_subsys_init,
+};
+subsys_register(fs, &fs_subsys_ops);

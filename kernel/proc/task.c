@@ -7,6 +7,7 @@
 #include "printk.h"
 #include "string.h"
 #include "vfs.h"
+#include "subsys.h"
 
 static struct task_struct init_task = {
 	.thread		= { 0 },
@@ -75,3 +76,16 @@ void task_free(struct task_struct *task)
 	kfree(task->files);
 	kfree(task);
 }
+
+int proc_init(void)
+{
+	/* init_task is statically allocated; nothing to do yet. */
+	return 0;
+}
+
+static const struct subsys_ops proc_subsys_ops = {
+	.name = "proc",
+	.level = SUBSYS_LEVEL_PROC,
+	.init = proc_init,
+};
+subsys_register(proc, &proc_subsys_ops);

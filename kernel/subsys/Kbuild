@@ -1,0 +1,4 @@
+obj-y := subsys.o
+obj-y += syscall_dispatch.o
+
+include $(TOPDIR)/scripts/Kbuild.include

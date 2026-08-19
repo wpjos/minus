@@ -1,5 +1,7 @@
 #include "irq.h"
 #include "gic.h"
+#include "subsys.h"
+#include "printk.h"
 
 /* Defined in vectors.S */
 extern char vector_table[];
@@ -30,3 +32,16 @@ int disable_irq(unsigned int irq)
 {
 	return gic_irq_disable(irq);
 }
+
+static int irq_subsys_init(void)
+{
+	irq_init();
+	return 0;
+}
+
+static const struct subsys_ops irq_subsys_ops = {
+	.name = "irq",
+	.level = SUBSYS_LEVEL_IRQ,
+	.init = irq_subsys_init,
+};
+subsys_register(irq, &irq_subsys_ops);

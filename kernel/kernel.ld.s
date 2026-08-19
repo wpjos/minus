@@ -25,6 +25,14 @@ SECTIONS
 		*(.module_l7.init)
 		__module_end = .;
 
+		__subsys_start = .;
+		*(.subsys.init)
+		__subsys_end = .;
+
+		__syscalls_start = .;
+		*(.syscalls.init)
+		__syscalls_end = .;
+
 		__vector_start = .;
 		*(.vector.init)
 		__vector_end = .;

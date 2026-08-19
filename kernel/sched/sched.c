@@ -4,6 +4,8 @@
 #include "mmu.h"
 #include "memory.h"
 #include "irqflags.h"
+#include "subsys.h"
+#include "syscall_dispatch.h"
 
 /* Per-priority FIFO run queues.  Index 0 is highest priority. */
 static struct dlist_node run_queue[SCHED_PRIO_MAX];
@@ -192,3 +194,31 @@ void schedule_if_needed(void)
 	if (current->need_resched)
 		schedule();
 }
+
+static int sched_subsys_init(void)
+{
+	sched_init();
+	return 0;
+}
+
+static const struct subsys_ops sched_subsys_ops = {
+	.name = "sched",
+	.level = SUBSYS_LEVEL_SCHED,
+	.init = sched_subsys_init,
+};
+subsys_register(sched, &sched_subsys_ops);
+
+static long sys_yield(uint64_t a0, uint64_t a1, uint64_t a2,
+		      uint64_t a3, uint64_t a4, uint64_t a5)
+{
+	(void)a0;
+	(void)a1;
+	(void)a2;
+	(void)a3;
+	(void)a4;
+	(void)a5;
+
+	schedule();
+	return 0;
+}
+syscall_register(SYS_YIELD, sys_yield, "sched");

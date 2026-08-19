@@ -8,6 +8,7 @@
 #include "fcntl.h"
 #include "dirent.h"
 #include "file.h"
+#include "syscall_dispatch.h"
 
 #define PATH_LEN 256
 
@@ -311,3 +312,16 @@ long sys_mmap(void *addr, size_t length, int prot, int flags,
 
 	return (long)uva;
 }
+
+syscall_register(SYS_OPENAT, sys_openat, "fs");
+syscall_register(SYS_CLOSE, sys_close, "fs");
+syscall_register(SYS_READ, sys_read, "fs");
+syscall_register(SYS_WRITE, sys_write, "fs");
+syscall_register(SYS_LSEEK, sys_lseek, "fs");
+syscall_register(SYS_NEWFSTATAT, sys_newfstatat, "fs");
+syscall_register(SYS_FSTAT, sys_fstat, "fs");
+syscall_register(SYS_UNLINKAT, sys_unlinkat, "fs");
+syscall_register(SYS_MKDIRAT, sys_mkdirat, "fs");
+syscall_register(SYS_GETDENTS64, sys_getdents64, "fs");
+syscall_register(SYS_IOCTL, sys_ioctl, "fs");
+syscall_register(SYS_MMAP, sys_mmap, "fs");

@@ -5,6 +5,7 @@
 #include "errno.h"
 #include "printk.h"
 #include "uaccess.h"
+#include "syscall_dispatch.h"
 
 long sys_execve(const char *filename, char *const argv[],
 		       char *const envp[])
@@ -36,4 +37,8 @@ long sys_exit(int code)
 		;
 	return 0;
 }
+
+syscall_register(SYS_GETPID, sys_getpid, "proc");
+syscall_register(SYS_EXECVE, sys_execve, "proc");
+syscall_register(SYS_EXIT, sys_exit, "proc");
 

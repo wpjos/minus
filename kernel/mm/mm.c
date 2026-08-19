@@ -5,6 +5,7 @@
 #include "mmu.h"
 #include "memory.h"
 #include "string.h"
+#include "subsys.h"
 
 struct page *g_mem_pages;
 size_t g_pfn_offset;
@@ -99,12 +100,19 @@ void kfree_pages(void *vaddr)
 		buddy_free_pages(virt_to_page(vaddr));
 }
 
-void mm_init(void)
+int mm_init(void)
 {
 	memblock_init();
 	switch_pgd();
 	page_env_prepare();
 	reclaim_mem_to_buddy();
 	slab_init();
-	mmu_clear_ttbr0();
+	return 0;
 }
+
+static const struct subsys_ops mm_subsys_ops = {
+	.name = "mm",
+	.level = SUBSYS_LEVEL_MM,
+	.init = mm_init,
+};
+subsys_register(mm, &mm_subsys_ops);

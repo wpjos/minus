@@ -1,11 +1,13 @@
 #include "module.h"
+#include "subsys.h"
 #include "printk.h"
 #include "mm.h"
 #include "irq.h"
+#include "mmu.h"
 #include "task.h"
 #include "sched.h"
 #include "vfs.h"
-#include "boot/cmdline.h"
+#include "cmdline.h"
 #include "string.h"
 #include "fcntl.h"
 #include "proc_execve.h"
@@ -16,13 +18,14 @@ int start_kernel(void)
 {
 	struct bootargs args;
 
-	mm_init();
-	irq_init();
+	if (subsys_init_all() < 0) {
+		printk("subsys_init_all failed\n");
+		while (1)
+			;
+	}
 
-	sched_init();
-
-	vfs_init();
 	module_init();
+	mmu_clear_ttbr0();
 
 	printk("%s\n", &logo[0]);
 

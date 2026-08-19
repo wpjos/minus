@@ -28,7 +28,8 @@ DTB_SRCS      := $(wildcard $(TOPDIR)/arch/dts/*.dts)
 DTBS          := $(patsubst $(TOPDIR)/arch/dts/%.dts,$(DTB_DIR)/%.dtb,$(DTB_SRCS))
 
 # 公共头文件搜索路径（C/汇编/链接脚本预处理共用）
-KBUILD_CPPFLAGS := $(addprefix -I,$(wildcard $(TOPDIR)/include/*)) \
+KBUILD_CPPFLAGS := -I $(TOPDIR)/include \
+                   $(addprefix -I,$(wildcard $(TOPDIR)/include/*/)) \
                    -I $(TOPDIR)/lib/libfdt
 
 # 编译标志（AArch64 裸机必备）

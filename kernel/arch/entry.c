@@ -1,7 +1,7 @@
 #include "pt_regs.h"
 #include "irq.h"
 #include "printk.h"
-#include "syscall.h"
+#include "syscall_dispatch.h"
 #include "sched.h"
 
 #define ESR_EL1_EC_SHIFT	26
