@@ -1,3 +1,6 @@
-obj-y := task.o loader.o proc_execve.o sysif_proc.o
+ccflags-y := -I$(TOPDIR)/kernel/proc
+
+obj-y := process.o loader.o proc_execve.o
+obj-y += sysif/
 
 include $(TOPDIR)/scripts/Kbuild.include

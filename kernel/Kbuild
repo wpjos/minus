@@ -1,12 +1,10 @@
-obj-y := init.o
-obj-y += boot/
+# core/ is the microkernel: arch bring-up, boot, capability & service
+# registry, scheduler, syscall dispatch, and kernel logging.  Everything
+# else (mm, fs, proc, drivers) is a server on top of it.
+obj-y := core/
 obj-y += mm/
-obj-y += arch/
 obj-y += driver/
-obj-y += sched/
-obj-y += syscall/
 obj-y += fs/
-obj-y += klog/
 obj-y += proc/
 
 include $(TOPDIR)/scripts/Kbuild.include

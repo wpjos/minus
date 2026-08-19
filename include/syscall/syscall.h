@@ -1,10 +1,6 @@
 #ifndef __SYSCALL_H__
 #define __SYSCALL_H__
 
-#include "sysif_fs.h"
-
-#include "pt_regs.h"
-
 /* ARM64 syscall numbers for the implemented syscalls. */
 #define SYS_GETDENTS64	61
 #define SYS_MKDIRAT	34
@@ -22,8 +18,7 @@
 #define SYS_EXECVE	221
 
 #define SYS_IOCTL	29
+#define SYS_CHDIR	49
 #define SYS_MMAP	222
-
-void do_syscall(struct pt_regs *regs);
 
 #endif /* __SYSCALL_H__ */

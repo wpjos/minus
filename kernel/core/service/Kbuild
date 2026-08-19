@@ -1,0 +1,6 @@
+obj-y := svc.o
+obj-y += cap.o
+obj-y += ipc_local.o
+obj-y += switch_notify.o
+
+include $(TOPDIR)/scripts/Kbuild.include

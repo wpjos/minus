@@ -11,6 +11,7 @@
 #define SYS_READ	63
 #define SYS_WRITE	64
 #define SYS_NEWFSTATAT	76
+#define SYS_CHDIR	49
 #define SYS_EXIT	93
 #define SYS_EXECVE	221
 
@@ -113,6 +114,11 @@ static long sys_execve(const char *path, char *const argv[], char *const envp[])
 static long sys_mkdirat(int dirfd, const char *path, unsigned int mode)
 {
 	return syscall3(SYS_MKDIRAT, dirfd, (long)path, mode);
+}
+
+static long sys_chdir(const char *path)
+{
+	return syscall1(SYS_CHDIR, (long)path);
 }
 
 static long sys_getdents64(int fd, void *buf, unsigned int count)
@@ -274,6 +280,9 @@ static void cmd_cd(const char *arg)
 		print("cd: not a directory\n");
 		return;
 	}
+
+	/* Keep the kernel-side cwd in sync so relative paths work too. */
+	sys_chdir(path);
 
 	strncpy(cwd, path, sizeof(cwd) - 1);
 	cwd[sizeof(cwd) - 1] = '\0';

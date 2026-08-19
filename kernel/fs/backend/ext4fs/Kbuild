@@ -1,0 +1,5 @@
+ccflags-y := -I$(TOPDIR)/kernel/fs/backend/bcache
+
+obj-y := super.o inode.o extent.o dir.o file.o namei.o
+
+include $(TOPDIR)/scripts/Kbuild.include

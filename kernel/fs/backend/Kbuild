@@ -1,0 +1,8 @@
+# backend/ 下的子目录按依赖顺序列出：bcache 是块文件系统的共享块缓存
+#（纯 (block_device, blocknr) 层，不认识 VFS 类型），ext4fs 依赖它，
+# devfs 是内存文件系统不依赖它。
+obj-y += bcache/
+obj-y += ext4fs/
+obj-y += devfs/
+
+include $(TOPDIR)/scripts/Kbuild.include

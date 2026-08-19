@@ -1,0 +1,3 @@
+obj-y := thread.o sched.o
+
+include $(TOPDIR)/scripts/Kbuild.include

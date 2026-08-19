@@ -2,7 +2,7 @@
 #include "of.h"
 #include "fdt.h"
 #include "mmu.h"
-#include "mm.h"
+#include "mmu.h"
 #include "module.h"
 #include "printk.h"
 #include "string.h"

@@ -1,3 +1,0 @@
-obj-y := vfs.o dcache.o inode.o mount.o namei.o fdtable.o
-
-include $(TOPDIR)/scripts/Kbuild.include

@@ -5,6 +5,13 @@
 #include "mmu.h"
 #include "memory.h"
 #include "string.h"
+#include "errno.h"
+#include "subsys.h"
+#include "svc.h"
+#include "cap.h"
+#include "mm_service.h"
+#include "uaccess.h"
+#include "vspace.h"
 
 struct page *g_mem_pages;
 size_t g_pfn_offset;
@@ -99,12 +106,89 @@ void kfree_pages(void *vaddr)
 		buddy_free_pages(virt_to_page(vaddr));
 }
 
-void mm_init(void)
+int mm_init(void)
 {
 	memblock_init();
 	switch_pgd();
 	page_env_prepare();
 	reclaim_mem_to_buddy();
 	slab_init();
-	mmu_clear_ttbr0();
+	return 0;
+}
+
+static int mm_map_user_pages(cap_t vspace_cap, uint64_t phys, size_t size,
+			     uint32_t flags, uint64_t *uva)
+{
+	struct vspace *vs = cap_resolve(vspace_cap, cap_rights(CAP_R_MAP));
+
+	if (!vs)
+		return -EINVAL;
+	return vspace_map_contig_phys(vs, phys, size, flags, uva);
+}
+
+static long mm_vspace_map_page(cap_t vspace_cap, uint64_t uva,
+			       uint32_t flags, void **kva)
+{
+	struct vspace *vs = cap_resolve(vspace_cap, cap_rights(CAP_R_MAP));
+
+	if (!vs)
+		return -EINVAL;
+	return vspace_map_page(vs, uva, flags, kva);
+}
+
+static cap_t mm_vspace_create(void)
+{
+	struct vspace *vs = vspace_alloc();
+
+	if (!vs)
+		return CAP_NULL;
+	return cap_alloc(vs, cap_rights(CAP_R_MAP | CAP_R_CTL));
+}
+
+static void mm_vspace_destroy(cap_t vspace_cap)
+{
+	struct vspace *vs = cap_resolve(vspace_cap, cap_rights(CAP_R_CTL));
+
+	if (!vs)
+		return;
+	cap_free(vspace_cap);
+	vspace_free(vs);
+}
+
+static const struct mm_service g_mm_service = {
+	.copy_from_user = copy_from_user,
+	.copy_to_user = copy_to_user,
+	.strncpy_from_user = strncpy_from_user,
+	.map_user_pages = mm_map_user_pages,
+	.vspace_map_page = mm_vspace_map_page,
+	.vspace_create = mm_vspace_create,
+	.vspace_destroy = mm_vspace_destroy,
+};
+
+static int mm_subsys_init(void)
+{
+	int ret;
+
+	ret = mm_init();
+	if (ret)
+		return ret;
+
+	/* Subscribe the vspace mirror to core's switch notification bus. */
+	ret = uaccess_init();
+	if (ret)
+		return ret;
+
+	svc_register("mm", &g_mm_service);
+	return 0;
+}
+
+subsys_register(mm, SUBSYS_LEVEL_MM, mm_subsys_init);
+
+const struct mm_service *mm_service(void)
+{
+	static const struct mm_service *tbl;
+
+	if (!tbl)
+		tbl = (const struct mm_service *)svc_lookup("mm");
+	return tbl;
 }

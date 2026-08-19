@@ -1,3 +1,0 @@
-obj-y := super.o inode.o extent.o dir.o file.o namei.o
-
-include $(TOPDIR)/scripts/Kbuild.include

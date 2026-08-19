@@ -1,3 +1,0 @@
-obj-y := buffer.o
-
-include $(TOPDIR)/scripts/Kbuild.include

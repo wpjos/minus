@@ -1,5 +1,0 @@
-obj-y := sched.o switch.o
-
-ccflags-y := -I$(TOPDIR)/kernel/mm
-
-include $(TOPDIR)/scripts/Kbuild.include

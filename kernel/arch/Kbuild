@@ -1,6 +1,0 @@
-obj-y := irq.o start.o vectors.o early_mmu.o mmu.o entry.o
-
-ccflags-y := -I$(TOPDIR)/kernel/driver/gic \
-             -I$(TOPDIR)/kernel/mm
-
-include $(TOPDIR)/scripts/Kbuild.include

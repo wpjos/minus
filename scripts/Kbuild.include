@@ -4,27 +4,45 @@
 # subdir-ccflags-y: flags that propagate to all subdirectories
 ALL_CCFLAGS := $(ccflags-y) $(subdir-ccflags-y)
 
+# OBJDIR is passed down by recursive makes.  Top-level Kbuild gets the default
+# output/.tmp directory; nested Kbuilds inherit their parent's OBJDIR so that
+# subdirectories with the same name (e.g. mm/sysif, fs/sysif) do not collide.
+OBJDIR ?= $(OUTPUT)/.tmp
 # 1. 汇编文件编译（.S → .o）
 $(OBJDIR)/%.o: %.S
 	$(CC) $(CFLAGS) $(ALL_CCFLAGS) -c $< -o $@
 
 # 2. C 文件编译（.c → .o）
+# -MMD -MP 在编译的同时生成 .d 依赖文件（记录该 .c 包含的头文件），
+# 下方 -include 把它们纳入 make 的依赖图。没有这一步，模式规则只依赖
+# .c 本身：改头文件（如 switch_notify.h 改 envelope 布局）不会触发重编，
+# 旧 .o 按旧布局读新结构 —— 极难排查的“陈旧目标文件”问题即源于此。
 $(OBJDIR)/%.o: %.c
-	$(CC) $(CFLAGS) $(ALL_CCFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(ALL_CCFLAGS) -MMD -MP -c $< -o $@
 
 # 声明子目录产物路径（仅定义路径，实现逻辑在 include 文件）
 subdir-y := $(patsubst %/,%,$(filter %/, $(obj-y)))
-subdir-objs := $(foreach dir,$(subdir-y),$(OUTPUT)/.tmp/$(dir)/built-in.o)
+subdir-objs := $(foreach dir,$(subdir-y),$(OBJDIR)/$(dir)/built-in.o)
 
 
 # ===================== 实现：built-in.o 生成 =====================
 obj-files := $(filter-out %/, $(obj-y))
 objs := $(addprefix $(OBJDIR)/, $(obj-files))
-built-in.o: $(objs) $(subdir-objs)
+# 读入已生成的 .d（首轮编译前不存在时静默跳过）。.d 的首个目标会被 make
+# 当作"第一个目标"，故仅在调用方未指定默认目标时钉到 built-in.o——顶层
+# Kbuild 自带 all 目标，不能被这里劫持。
+-include $(objs:.o=.d)
+ifeq ($(origin .DEFAULT_GOAL),undefined)
+.DEFAULT_GOAL := $(OBJDIR)/built-in.o
+endif
+
+# built-in.o 直接写入 OBJDIR：源码目录零产物（曾按源码目录内生成 + mv 搬运
+# 设计，构建失败/中断会残留 built-in.o，且 make clean 只删 output/ 扫不到）。
+$(OBJDIR)/built-in.o: $(objs) $(subdir-objs)
 	$(LD) -r -o $@ $^
 
 # ===================== 实现：链接脚本预处理 (.ld.s -> .ld) =====================
-$(OUTPUT)/kernel.ld: $(TOPDIR)/kernel/kernel.ld.s $(TOPDIR)/include/arch/memory.h
+$(OUTPUT)/kernel.ld: $(TOPDIR)/kernel/core/kernel.ld.s $(TOPDIR)/include/arch/memory.h
 	@mkdir -p $(dir $@)
 	$(CC) -E -P -C -xc -D__LINKER__ $(CPPFLAGS) -o $@ $<
 
@@ -33,17 +51,26 @@ $(OUTPUT)/kernel.elf: $(subdir-objs) $(OUTPUT)/kernel.ld
 	$(LD) $(LDFLAGS) -o $@ $(subdir-objs)
 
 # ===================== 实现：子目录递归编译 =====================
-$(OUTPUT)/.tmp/%/built-in.o:
+# The sub-make has the real per-file prerequisite knowledge; FORCE keeps this
+# delegation alive so that edits inside subdirectories are picked up without
+# a manual clean.  When nothing changed the sub-make is a cheap no-op.
+# 目标 $@（OBJDIR 下的绝对路径）作为显式目标传给子 make：子 make 不依赖
+# 默认目标，产物也就不会先落到源码目录。
+$(OBJDIR)/%/built-in.o: FORCE
 	@mkdir -p $(dir $@)
 	@if [ -f $(CURDIR)/$*/Kbuild ]; then \
-		$(MAKE) -C $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@) \
+		$(MAKE) -C $* \
 			-f $(CURDIR)/$*/Kbuild \
 			CFLAGS="$(CFLAGS) $(ALL_CCFLAGS)" \
-			OBJDIR=$(OUTPUT)/.tmp/$* TOPDIR=$(TOPDIR); \
+			OBJDIR=$(OBJDIR)/$* TOPDIR=$(TOPDIR) $@; \
 	else \
-		$(MAKE) -C $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@) \
+		$(MAKE) -C $* \
 			-f $(TOPDIR)/scripts/Kbuild.default \
 			CFLAGS="$(CFLAGS) $(ALL_CCFLAGS)" \
-			OBJDIR=$(OUTPUT)/.tmp/$* TOPDIR=$(TOPDIR); \
+			OBJDIR=$(OBJDIR)/$* TOPDIR=$(TOPDIR) $@; \
 	fi
-	@mv $(patsubst $(OUTPUT)/.tmp/%/built-in.o,%,$@)/built-in.o $@
+
+# Always-out-of-date marker used to force subdir delegation (see above).
+FORCE:
+
+.PHONY: FORCE

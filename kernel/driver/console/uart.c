@@ -5,8 +5,6 @@
 #include "mmu.h"
 #include "printk.h"
 #include "irq.h"
-#include "sched.h"
-#include "task.h"
 #include "irqflags.h"
 #include "wait.h"
 #include "errno.h"

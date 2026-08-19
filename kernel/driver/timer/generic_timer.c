@@ -4,8 +4,7 @@
 #include "printk.h"
 #include "irq.h"
 #include "generic_timer.h"
-#include "sched.h"
-#include "task.h"
+#include "thread.h"
 #include "errno.h"
 
 /* Tick interval in milliseconds */
@@ -21,7 +20,12 @@ static int generic_timer_tick_handler(unsigned int irq, void *dev_id)
 	/* Reload timer to keep ticking */
 	generic_timer_set_cntptval((uint64_t)(generic_timer_get_cntfrq() / 1000 * TICK_MS));
 
-	scheduler_tick();
+	/*
+	 * Charge the current thread's time slice.  Drivers call core's
+	 * thread API directly: they are in-kernel modules in both the
+	 * monolithic and the micro-kernel build.
+	 */
+	thread_tick();
 
 	return 0;
 }

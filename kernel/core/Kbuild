@@ -1,0 +1,9 @@
+obj-y := init.o
+obj-y += boot/
+obj-y += service/
+obj-y += arch/
+obj-y += thread/
+obj-y += subsys/
+obj-y += klog/
+
+include $(TOPDIR)/scripts/Kbuild.include

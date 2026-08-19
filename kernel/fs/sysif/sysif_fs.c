@@ -1,31 +1,37 @@
+#include "file.h"
 #include "vfs.h"
-#include "sysif_fs.h"
-#include "task.h"
-#include "uaccess.h"
+#include "mm_service.h"
+#include "syscall_dispatch.h"
 #include "string.h"
 #include "errno.h"
-#include "stat.h"
-#include "fcntl.h"
-#include "dirent.h"
-#include "file.h"
 
-#define PATH_LEN 256
+/*
+ * Syscall stubs for the FS.
+ *
+ * sysif/ is inside the FS module, so these handlers speak kernel pointers
+ * only: the fd layer (fdtable.c) and the VFS core are called directly -
+ * no service table, no capability round-trip.  The current task's fdtable
+ * comes from the per-CPU mirror fed by core's switch notification bus.
+ * Bouncing user paths/buffers through small kernel stack buffers happens
+ * here and only here; everything below works on kernel addresses.
+ */
+
+#define SYS_PATH_LEN	256
+#define SYS_IO_BOUNCE	256
+#define SYS_DENTS_BOUNCE 1024
 
 static long copy_path_from_user(char *dst, const char *src)
 {
-	long ret;
-
-	ret = strncpy_from_user(dst, src, PATH_LEN);
-	if (ret != 0)
+	if (mm_call(strncpy_from_user, dst, (user_addr_t)(uintptr_t)src,
+		    SYS_PATH_LEN) != 0)
 		return -EFAULT;
 	return 0;
 }
 
-long sys_openat(int dirfd, const char *pathname, int flags, uint16_t mode)
+static long sys_openat(int dirfd, const char *pathname, int flags,
+		       uint16_t mode)
 {
-	char path[PATH_LEN];
-	struct file *file;
-	int fd;
+	char path[SYS_PATH_LEN];
 	long ret;
 
 	(void)dirfd;
@@ -34,59 +40,38 @@ long sys_openat(int dirfd, const char *pathname, int flags, uint16_t mode)
 	if (ret < 0)
 		return ret;
 
-	ret = vfs_open(path, flags, mode, &file);
-	if (ret < 0)
-		return ret;
-
-	fd = get_unused_fd(current->files);
-	if (fd < 0) {
-		vfs_close(file);
-		return fd;
-	}
-
-	fd_install(current->files, fd, file);
-	return fd;
+	return fd_openat(path, flags, mode);
 }
 
-long sys_close(unsigned int fd)
+static long sys_close(unsigned int fd)
 {
-	struct file *file;
-
-	file = fget(current->files, fd);
-	if (!file)
-		return -EBADF;
-
-	put_unused_fd(current->files, fd);
-	vfs_close(file);
-	return 0;
+	return fd_close(fd);
 }
 
-long sys_read(unsigned int fd, char *buf, size_t count)
+static long sys_read(unsigned int fd, user_addr_t buf, size_t count)
 {
-	struct file *file;
-	char kbuf[256];
+	char kbuf[SYS_IO_BOUNCE];
 	size_t done = 0;
 
-	file = fget(current->files, fd);
-	if (!file)
-		return -EBADF;
+	if (count == 0)
+		return 0;
 
 	while (done < count) {
 		size_t chunk = count - done;
-		long ret;
-		long cpy;
+		ssize_t ret;
 
 		if (chunk > sizeof(kbuf))
 			chunk = sizeof(kbuf);
 
-		ret = vfs_read(file, kbuf, chunk, NULL);
+		ret = fd_read(fd, kbuf, chunk);
 		if (ret < 0)
 			return done ? (long)done : ret;
 		if (ret == 0)
 			break;
 
-		cpy = copy_to_user(buf + done, kbuf, (size_t)ret);
-		if (cpy != 0)
+		if (mm_call(copy_to_user,
+			    (user_addr_t)((uintptr_t)buf + done),
+			    kbuf, (size_t)ret) != 0)
 			return done ? (long)done : -EFAULT;
 
 		done += (size_t)ret;
@@ -97,27 +82,27 @@ long sys_read(unsigned int fd, char *buf, size_t count)
 	return (long)done;
 }
 
-long sys_write(unsigned int fd, const char *buf, size_t count)
+static long sys_write(unsigned int fd, user_addr_t buf, size_t count)
 {
-	struct file *file;
-	char kbuf[256];
+	char kbuf[SYS_IO_BOUNCE];
 	size_t done = 0;
 
-	file = fget(current->files, fd);
-	if (!file)
-		return -EBADF;
+	if (count == 0)
+		return 0;
 
 	while (done < count) {
 		size_t chunk = count - done;
-		long ret;
+		ssize_t ret;
 
 		if (chunk > sizeof(kbuf))
 			chunk = sizeof(kbuf);
 
-		if (copy_from_user(kbuf, buf + done, chunk) != 0)
+		if (mm_call(copy_from_user, kbuf,
+			    (user_addr_t)((uintptr_t)buf + done),
+			    chunk) != 0)
 			return done ? (long)done : -EFAULT;
 
-		ret = vfs_write(file, kbuf, chunk, NULL);
+		ret = fd_write(fd, kbuf, chunk);
 		if (ret < 0)
 			return done ? (long)done : ret;
 
@@ -129,21 +114,15 @@ long sys_write(unsigned int fd, const char *buf, size_t count)
 	return (long)done;
 }
 
-long sys_lseek(unsigned int fd, long offset, int whence)
+static long sys_lseek(unsigned int fd, long offset, int whence)
 {
-	struct file *file;
-
-	file = fget(current->files, fd);
-	if (!file)
-		return -EBADF;
-
-	return (long)vfs_llseek(file, (loff_t)offset, whence);
+	return fd_lseek(fd, offset, whence);
 }
 
-long sys_newfstatat(int dirfd, const char *pathname, struct stat *statbuf,
-		    int flags)
+static long sys_newfstatat(int dirfd, const char *pathname,
+			   user_addr_t statbuf, int flags)
 {
-	char path[PATH_LEN];
+	char path[SYS_PATH_LEN];
 	struct stat st;
 	long ret;
 
@@ -158,33 +137,28 @@ long sys_newfstatat(int dirfd, const char *pathname, struct stat *statbuf,
 	if (ret < 0)
 		return ret;
 
-	if (copy_to_user(statbuf, &st, sizeof(st)) != 0)
+	if (mm_call(copy_to_user, statbuf, &st, sizeof(st)) != 0)
 		return -EFAULT;
 	return 0;
 }
 
-long sys_fstat(unsigned int fd, struct stat *statbuf)
+static long sys_fstat(unsigned int fd, user_addr_t statbuf)
 {
-	struct file *file;
 	struct stat st;
 	long ret;
 
-	file = fget(current->files, fd);
-	if (!file)
-		return -EBADF;
-
-	ret = vfs_fstat(file, &st);
+	ret = fd_fstat(fd, &st);
 	if (ret < 0)
 		return ret;
 
-	if (copy_to_user(statbuf, &st, sizeof(st)) != 0)
+	if (mm_call(copy_to_user, statbuf, &st, sizeof(st)) != 0)
 		return -EFAULT;
 	return 0;
 }
 
-long sys_unlinkat(int dirfd, const char *pathname, int flags)
+static long sys_unlinkat(int dirfd, const char *pathname, int flags)
 {
-	char path[PATH_LEN];
+	char path[SYS_PATH_LEN];
 	long ret;
 
 	(void)dirfd;
@@ -197,9 +171,9 @@ long sys_unlinkat(int dirfd, const char *pathname, int flags)
 	return vfs_unlink(path);
 }
 
-long sys_mkdirat(int dirfd, const char *pathname, uint16_t mode)
+static long sys_mkdirat(int dirfd, const char *pathname, uint16_t mode)
 {
-	char path[PATH_LEN];
+	char path[SYS_PATH_LEN];
 	long ret;
 
 	(void)dirfd;
@@ -211,103 +185,71 @@ long sys_mkdirat(int dirfd, const char *pathname, uint16_t mode)
 	return vfs_mkdir(path, mode);
 }
 
-struct getdents_ctx {
-	struct dir_context ctx;
-	char *buf;
-	size_t count;
-	size_t pos;
-};
-
-static long filldir(struct dir_context *ctx, const char *name, int namlen,
-		    loff_t off, uint64_t ino, unsigned int d_type)
+static long sys_getdents64(unsigned int fd, user_addr_t buf, unsigned int count)
 {
-	struct getdents_ctx *g = container_of(ctx, struct getdents_ctx, ctx);
-	struct dirent64_s de;
-	size_t reclen;
-	char rec[128];
-
-	reclen = sizeof(struct dirent64_s) + namlen + 1;
-	reclen = (reclen + 7) & ~7;
-
-	if (g->pos + reclen > g->count)
-		return 1;
-
-	if (reclen > sizeof(rec))
-		return -EINVAL;
-
-	memset(&de, 0, sizeof(de));
-	de.d_ino = ino;
-	de.d_off = off;
-	de.d_reclen = reclen;
-	de.d_type = d_type;
-
-	memset(rec, 0, reclen);
-	memcpy(rec, &de, sizeof(de));
-	memcpy(rec + sizeof(de), name, namlen);
-	rec[sizeof(de) + namlen] = '\0';
-
-	if (copy_to_user(g->buf + g->pos, rec, reclen) != 0)
-		return -EFAULT;
-
-	g->pos += reclen;
-	return 0;
-}
-
-long sys_getdents64(unsigned int fd, char *buf, unsigned int count)
-{
-	struct file *file;
-	struct getdents_ctx ctx;
+	char kbuf[SYS_DENTS_BOUNCE];
 	long ret;
 
-	file = fget(current->files, fd);
-	if (!file)
-		return -EBADF;
+	if (count > sizeof(kbuf))
+		count = sizeof(kbuf);
 
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.ctx.actor = filldir;
-	ctx.buf = buf;
-	ctx.count = count;
-	ctx.pos = 0;
+	ret = fd_getdents64(fd,
+			    (struct dirent64_s *)kbuf, count);
+	if (ret <= 0)
+		return ret;
 
-	ret = vfs_readdir(file, &ctx.ctx);
-	return ret == 0 ? (long)ctx.pos : ret;
+	if (mm_call(copy_to_user, buf, kbuf, (size_t)ret) != 0)
+		return -EFAULT;
+	return ret;
 }
 
-long sys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
+static long sys_chdir(const char *pathname)
 {
-	struct file *file;
+	char path[SYS_PATH_LEN];
+	long ret;
 
-	file = fget(current->files, fd);
-	if (!file)
-		return -EBADF;
-
-	if (file->f_op && file->f_op->ioctl)
-		return file->f_op->ioctl(file, cmd, arg);
-
-	return -ENOTTY;
+	ret = copy_path_from_user(path, pathname);
+	if (ret < 0)
+		return ret;
+	return fd_chdir(path);
 }
 
-long sys_mmap(void *addr, size_t length, int prot, int flags,
-	      unsigned int fd, long offset)
+static long sys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
 {
-	struct file *file;
-	void *uva;
+	return fd_ioctl(fd, cmd, arg);
+}
+
+/*
+ * File/device-backed mmap is an FS syscall: it names an fd, so it lives
+ * here on the fd layer.  Anonymous mapping will be MM's own syscall when
+ * it arrives.  All scalar/return-value passing; no user buffers involved.
+ */
+static long sys_mmap(void *addr, size_t length, int prot, int flags,
+		     unsigned int fd, long offset)
+{
+	uint64_t uva;
 	long ret;
 
 	(void)addr;
 	(void)prot;
 	(void)flags;
 
-	file = fget(current->files, fd);
-	if (!file)
-		return -EBADF;
-
-	if (!file->f_op || !file->f_op->mmap)
-		return -ENODEV;
-
-	ret = file->f_op->mmap(file, &uva, length, (loff_t)offset);
+	ret = fd_mmap(fd, &uva, length, (loff_t)offset);
 	if (ret < 0)
-		return ret;
-
+		 return ret;
 	return (long)uva;
 }
+
+syscall_register(SYS_OPENAT, sys_openat);
+syscall_register(SYS_CLOSE, sys_close);
+syscall_register(SYS_READ, sys_read);
+syscall_register(SYS_WRITE, sys_write);
+syscall_register(SYS_LSEEK, sys_lseek);
+syscall_register(SYS_NEWFSTATAT, sys_newfstatat);
+syscall_register(SYS_FSTAT, sys_fstat);
+syscall_register(SYS_UNLINKAT, sys_unlinkat);
+syscall_register(SYS_MKDIRAT, sys_mkdirat);
+syscall_register(SYS_GETDENTS64, sys_getdents64);
+syscall_register(SYS_CHDIR, sys_chdir);
+syscall_register(SYS_IOCTL, sys_ioctl);
+syscall_register(SYS_MMAP, sys_mmap);

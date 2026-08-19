@@ -10,7 +10,6 @@ struct vspace *vspace_alloc(void)
 {
 	struct vspace *vs;
 	void *pgd;
-	void *kstack;
 
 	vs = kzalloc(sizeof(struct vspace));
 	if (!vs)
@@ -20,22 +19,13 @@ struct vspace *vspace_alloc(void)
 	vs->mmap_base = USER_MMAP_BASE;
 
 	pgd = kzalloc_pages(PAGE_SIZE);
-	if (!pgd)
-		goto fail_vs;
-
-	kstack = kzalloc_pages(PAGE_SIZE);
-	if (!kstack)
-		goto fail_pgd;
+	if (!pgd) {
+		kfree(vs);
+		return NULL;
+	}
 
 	vs->pgd = pgd;
-	vs->kstack_top = (uint64_t)kstack + PAGE_SIZE;
 	return vs;
-
-fail_pgd:
-	kfree_pages(pgd);
-fail_vs:
-	kfree(vs);
-	return NULL;
 }
 
 void vspace_free(struct vspace *vs)
@@ -58,8 +48,6 @@ void vspace_free(struct vspace *vs)
 
 	if (vs->pgd)
 		kfree_pages(vs->pgd);
-	if (vs->kstack_top)
-		kfree_pages((void *)(vs->kstack_top - PAGE_SIZE));
 
 	kfree(vs);
 }
@@ -129,8 +117,67 @@ int vspace_map_contig_phys(struct vspace *vs, uint64_t phys, size_t size,
 }
 
 /*
- * vspace_find_page - find the vregion containing @addr and return its backing
- * page plus the offset within that page.
+ * User protection flags (VM_*) to PTE attributes.  Writable-non-exec
+ * gets the stack/device attributes; the W+X combination is the one
+ * legacy loader mapping that stays RW-at-EL0, PXN (EL0-executable only).
+ */
+static uint64_t user_prot_to_attr(uint32_t flags)
+{
+	if (flags & VM_WRITE) {
+		if (flags & VM_EXEC)
+			return PTE_ATTR_NORMAL | PTE_SH_INNER |
+			       PTE_AP_RW_ANY | PTE_AF | PTE_PXN;
+		return MMU_REGION_USER_STACK;
+	}
+
+	if (flags & VM_EXEC)
+		return MMU_REGION_USER_CODE;
+
+	return MMU_REGION_USER_RO;
+}
+
+int vspace_map_page(struct vspace *vs, uint64_t uva, uint32_t flags,
+		    void **kva)
+{
+	struct vregion *vr;
+	struct page *page;
+	uint64_t attr;
+
+	if (!vs || !vs->pgd || !kva)
+		return -EINVAL;
+	if ((uva & (PAGE_SIZE - 1)) != 0)
+		return -EINVAL;
+
+	page = buddy_alloc_pages(PAGE_SIZE);
+	if (!page)
+		return -ENOMEM;
+
+	vr = kmalloc(sizeof(*vr));
+	if (!vr) {
+		buddy_free_pages(page);
+		return -ENOMEM;
+	}
+	memset(vr, 0, sizeof(*vr));
+
+	attr = user_prot_to_attr(flags);
+
+	vr->start = uva;
+	vr->end = uva + PAGE_SIZE;
+	vr->flags = flags;
+	vr->page = page;
+
+	mmu_map(vs->pgd, uva, page_to_phy(page), PAGE_SIZE, attr);
+	dlist_add_tail(&vs->vregion_list, &vr->node);
+
+	*kva = page_to_virt(page);
+	memset(*kva, 0, PAGE_SIZE);
+	return 0;
+}
+
+/*
+ * Activate @next's page table on TTBR0_EL1.  Called from mm's
+ * switch-notification callback inside the context switch, so every
+ * thread runs with its own user mappings from its first instruction.
  */
 void switch_vspace(struct vspace *prev, struct vspace *next)
 {

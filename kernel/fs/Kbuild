@@ -1,9 +1,7 @@
-ccflags-y := -I$(TOPDIR)/kernel/fs/vfs -I$(TOPDIR)/kernel/fs/fsblock
+ccflags-y := -I$(TOPDIR)/kernel/fs/service
 
 obj-y += sysif/
-obj-y += vfs/
-obj-y += fsblock/
-obj-y += ext4/
-obj-y += devfs/
+obj-y += service/
+obj-y += backend/
 
 include $(TOPDIR)/scripts/Kbuild.include

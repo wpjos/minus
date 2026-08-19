@@ -27,6 +27,14 @@ export ROOTFS := $(ROOTFS_DIR)/rootfs.ext4
 DTB_SRCS      := $(wildcard $(TOPDIR)/arch/dts/*.dts)
 DTBS          := $(patsubst $(TOPDIR)/arch/dts/%.dts,$(DTB_DIR)/%.dtb,$(DTB_SRCS))
 
+# Kconfig / autoconf 生成工具（产物统一放 output/，源码树保持干净；
+# 必须定义在 KBUILD_CFLAGS 之前，因其立即展开引用 AUTOCONF_H）
+KCONFIG_PY    := $(TOPDIR)/scripts/kconfig.py
+KCONFIG_ENV   := PYTHONDONTWRITEBYTECODE=1
+DEFCONFIG     := $(TOPDIR)/arch/configs/$(PLAT)_defconfig
+KCONFIG_DOT   := $(OUTPUT)/.config
+AUTOCONF_H    := $(OUTPUT)/include/generated/autoconf.h
+
 # 公共头文件搜索路径（C/汇编/链接脚本预处理共用）
 KBUILD_CPPFLAGS := $(addprefix -I,$(wildcard $(TOPDIR)/include/*)) \
                    -I $(TOPDIR)/lib/libfdt
@@ -34,7 +42,7 @@ KBUILD_CPPFLAGS := $(addprefix -I,$(wildcard $(TOPDIR)/include/*)) \
 # 编译标志（AArch64 裸机必备）
 KBUILD_CFLAGS := $(KBUILD_CPPFLAGS) \
                  -D__MINUS__ \
-                 -include $(TOPDIR)/include/generated/autoconf.h \
+                 -include $(AUTOCONF_H) \
                  -march=armv8-a \
                  -mgeneral-regs-only \
                  -ffreestanding \
@@ -47,22 +55,21 @@ KBUILD_CFLAGS := $(KBUILD_CPPFLAGS) \
 KBUILD_LDFLAGS := -m aarch64elf \
                   -T $(OUTPUT)/kernel.ld
 
-# Kconfig / autoconf 生成工具
-KCONFIG_PY    := $(TOPDIR)/scripts/kconfig.py
-DEFCONFIG     := $(TOPDIR)/arch/configs/$(PLAT)_defconfig
-AUTOCONF_H    := $(TOPDIR)/include/generated/autoconf.h
-
 # ===================== Kconfig 目标 =====================
 defconfig:
 	@echo "\033[33m[Minus] Generating .config for PLAT=$(PLAT)...\033[0m"
-	python3 $(KCONFIG_PY) defconfig --defconfig=$(DEFCONFIG)
+	$(KCONFIG_ENV) python3 $(KCONFIG_PY) defconfig \
+		--defconfig=$(DEFCONFIG) --config=$(KCONFIG_DOT) --autoconf=$(AUTOCONF_H)
 
 oldconfig syncconfig:
-	python3 $(KCONFIG_PY) syncconfig
+	$(KCONFIG_ENV) python3 $(KCONFIG_PY) syncconfig \
+		--config=$(KCONFIG_DOT) --autoconf=$(AUTOCONF_H)
 
 # 自动根据当前 PLAT 生成 autoconf.h（prepare 时调用）
 $(AUTOCONF_H): $(DEFCONFIG) $(TOPDIR)/Kconfig $(TOPDIR)/arch/Kconfig $(KCONFIG_PY)
-	@python3 $(KCONFIG_PY) defconfig --defconfig=$(DEFCONFIG)
+	@mkdir -p $(dir $@)
+	@$(KCONFIG_ENV) python3 $(KCONFIG_PY) defconfig \
+		--defconfig=$(DEFCONFIG) --config=$(KCONFIG_DOT) --autoconf=$(AUTOCONF_H)
 
 # ===================== 核心目标 =====================
 # 默认目标：编译内核 + 生成二进制文件 + 编译设备树 + 用户态程序 + rootfs
@@ -82,9 +89,14 @@ prepare: $(AUTOCONF_H)
 	@echo "\033[33m[Minus] Preparing output dir: $(OUTPUT)\033[0m"
 	@mkdir -p $(OUTPUT) $(OUTPUT)/.tmp $(DTB_DIR) ${ROOTFS_DIR}
 
+# Kernel sources tracked as prerequisites so that editing any of them
+# re-triggers the Kbuild sub-make.  Without this, $(TARGET) is considered
+# up to date once kernel.elf exists and edits are silently never compiled.
+KERNEL_SRCS := $(shell find $(TOPDIR)/kernel $(TOPDIR)/include $(TOPDIR)/lib \
+                 -type f \( -name '*.c' -o -name '*.h' -o -name '*.S' \) 2>/dev/null)
+
 # 调用顶层 Kbuild 执行编译（核心：-f 指定规则文件为 Kbuild）
-$(TARGET): | prepare
-$(TARGET):
+$(TARGET): $(KERNEL_SRCS) | prepare
 	@echo "\033[33m[Minus] Starting Kbuild compile...\033[0m"
 	$(MAKE) -f Kbuild \
 	        CFLAGS="$(KBUILD_CFLAGS)" \
@@ -98,9 +110,12 @@ $(BIN_TARGET): $(TARGET)
 	@echo "\033[33m[Minus] Generating binary file...\033[0m"
 	$(OBJCOPY) -O binary $< $@
 
-# 生成/刷新 rootfs.ext4，并安装用户态程序到 /bin
+# 生成/刷新 rootfs.ext4，并安装用户态程序到 /bin。
+# Real file target: only rebuilt when an installed uapp or the script changes.
 ROOTFS_SIZE_MB ?= 64
-rootfs: uapps
+rootfs: $(ROOTFS)
+
+$(ROOTFS): $(SHELL_ELF) $(FB_TEST_ELF) $(TOPDIR)/scripts/mkrootfs.sh | prepare
 	@echo "\033[33m[Minus] Creating rootfs.ext4...\033[0m"
 	@bash $(TOPDIR)/scripts/mkrootfs.sh $(ROOTFS_SIZE_MB) $(ROOTFS)
 
@@ -117,10 +132,11 @@ $(DTB_DIR)/%.dtb: $(TOPDIR)/arch/dts/%.dts
 clean:
 	@echo "\033[31m[Minus] Cleaning all output...\033[0m"
 	$(RM) $(OUTPUT)
-	$(RM) $(TOPDIR)/.config $(TOPDIR)/include/generated
 	$(RM) $(TOPDIR)/scripts/__pycache__
 	$(MAKE) -C $(TOPDIR)/uapps TOPDIR=$(TOPDIR) OUTPUT=$(OUTPUT) uapps-clean
+	@# 防御性清扫：旧版 Kbuild 会把 built-in.o 遗留在源码目录，rm output/ 扫不到
+	@find $(TOPDIR) -name built-in.o -type f -not -path "$(OUTPUT)/*" -not -path "*/.git/*" -delete
 	@echo "\033[32m[Minus] Clean success! ✨\033[0m"
 
 # 伪目标声明（避免与同名文件冲突）
-.PHONY: all prepare clean dtbs defconfig oldconfig syncconfig rootfs
+.PHONY: all prepare clean dtbs defconfig oldconfig syncconfig
